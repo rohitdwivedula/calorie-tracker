@@ -1,4 +1,4 @@
-Batch Nutrition V1 dashboard update (1.0.3, versionCode 5)
+Batch Nutrition V1 dashboard update (1.0.4, versionCode 6)
 
 Validation performed in this workspace:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
@@ -12,8 +12,8 @@ Validation performed in this workspace:
 - No Android device connected (adb devices empty).
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8162695
-SHA256: e0360aca2e8eb31e47ce756a65d8edef756490e168d97340623268c9fae1a7a5
+Bytes: 8169585
+SHA256: 1aeaae6c8bd610d90d1155ae59e95f55e20afa314b450df5a900ae177610c08a
 
 Not verified on a device: camera and permission flows, Android SQLite lifecycle,
 backup picker/restore, keyboard/accessibility, process recreation, screen layout,
@@ -43,3 +43,8 @@ Serving-first update: live tomato endpoint inspected: serving_size 0.5 cup (121 
 Nutrition-label view uses per-serving fields where present and exact saved unit
 conversions. Slider/text quantity and live selected totals added. Build, 24 tests,
 lint, APK signature and alignment checks passed. Physical-device UI testing pending.
+
+Reference-layout update: dark portion cards, controls before nutrition details,
+serving selector includes mass/volume, live calories, macro calorie split and
+aligned nutrition rows; fixed Cancel/Save footer. Build, 24 tests, lint, signature
+and alignment checks passed. Screenshot/device layout verification remains pending.

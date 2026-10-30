@@ -18,7 +18,9 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
 - Scanned foods open a nutrition-label page, preferring the package serving size and
   per-serving nutrient fields from Open Food Facts. Values are rounded for display;
   calculations retain their precision. Choose servings, grams or milliliters with a
-  slider and editable quantity; selected calories/macros update live. Grams/volume
+  slider and editable quantity; selected calories/macros update live. The dark portion
+  page puts controls first, with a macro calorie split and nutrition rows below;
+  Cancel/Save remain fixed at the bottom. Grams/volume
   controls appear only with an explicit per-serving conversion. No ml-to-g assumption.
 - Explicit g/ml amounts in serving-size text take precedence over structured unit
   metadata (which can conflict). Ambiguous fractions/decimal-comma text require a

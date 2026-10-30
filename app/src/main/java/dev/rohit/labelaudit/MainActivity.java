@@ -149,6 +149,11 @@ public class MainActivity extends ComponentActivity {
   }
 
   void screen(String title) {
+    getWindow().setStatusBarColor(0xfff4f5ef);
+    getWindow().setNavigationBarColor(0xfff4f5ef);
+    getWindow()
+        .getDecorView()
+        .setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
     page = layout();
     page.setBackgroundColor(0xfff5f5ed);
     ScrollView s = new ScrollView(this);
@@ -887,46 +892,85 @@ public class MainActivity extends ComponentActivity {
     return String.format(Locale.US, "%.2f", n).replaceAll("0+$", "").replaceAll("\\.$", "");
   }
 
+  TextView portionText(LinearLayout parent, String text, int size, boolean bold) {
+    TextView view = new TextView(this);
+    view.setText(text);
+    view.setTextColor(0xfff5f5f5);
+    view.setTextSize(size);
+    view.setPadding(0, dp(8), 0, dp(8));
+    if (bold) view.setTypeface(null, android.graphics.Typeface.BOLD);
+    parent.addView(view);
+    return view;
+  }
+
+  LinearLayout portionCard() {
+    LinearLayout box = card(page);
+    android.graphics.drawable.GradientDrawable background =
+        new android.graphics.drawable.GradientDrawable();
+    background.setColor(0xff19191b);
+    background.setCornerRadius(dp(24));
+    box.setBackground(background);
+    box.setPadding(dp(20), dp(16), dp(20), dp(16));
+    return box;
+  }
+
+  void portionButton(LinearLayout parent, String title, boolean primary, Action action) {
+    Button b = new Button(this);
+    b.setText(title);
+    b.setAllCaps(false);
+    b.setTextSize(17);
+    b.setTextColor(primary ? 0xff071b11 : 0xffededed);
+    android.graphics.drawable.GradientDrawable bg =
+        new android.graphics.drawable.GradientDrawable();
+    bg.setColor(primary ? 0xff80d6a2 : 0xff303033);
+    bg.setCornerRadius(dp(28));
+    b.setBackground(bg);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(52), 1);
+    params.setMargins(dp(4), dp(8), dp(4), dp(8));
+    parent.addView(b, params);
+    b.setOnClickListener(v -> safe(action));
+  }
+
+  TextView portionRow(LinearLayout parent, String title, int size, boolean bold) {
+    LinearLayout row = new LinearLayout(this);
+    row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+    parent.addView(row);
+    TextView left = portionText(row, title, size, bold);
+    left.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
+    TextView value = portionText(row, "", size, bold);
+    value.setGravity(android.view.Gravity.END);
+    return value;
+  }
+
   void quantity(JSONObject f, Quantity callback) {
     safe(
         () -> {
-          screen(f.getString("name"));
+          LinearLayout root = new LinearLayout(this);
+          root.setOrientation(LinearLayout.VERTICAL);
+          root.setBackgroundColor(0xff080808);
+          ScrollView scroll = new ScrollView(this);
+          scroll.setFillViewport(true);
+          page = new LinearLayout(this);
+          page.setOrientation(LinearLayout.VERTICAL);
+          page.setPadding(dp(16), dp(12), dp(16), dp(20));
+          scroll.addView(page);
+          root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+          LinearLayout footer = new LinearLayout(this);
+          footer.setOrientation(LinearLayout.HORIZONTAL);
+          footer.setPadding(dp(20), 0, dp(20), dp(8));
+          root.addView(footer);
+          setContentView(root);
+          getWindow().setStatusBarColor(0xff080808);
+          getWindow().setNavigationBarColor(0xff080808);
+          getWindow().getDecorView().setSystemUiVisibility(0);
+          portionText(page, "Set portion size", 26, true);
+          LinearLayout controls = portionCard();
+          portionText(controls, f.getString("name"), 22, true);
+          TextView selectedCalories = portionText(controls, "", 24, false);
+          selectedCalories.setTextColor(0xffb7b7bc);
+
           double grams = f.optDouble("servingGrams", 0), ml = f.optDouble("servingMl", 0);
           String base = f.getString("unit");
-          LinearLayout facts = card(page);
-          label(facts, "Nutrition facts", 24);
-          String serving = f.optString("servingLabel", "");
-          if (serving.isEmpty() && base.equals("serving"))
-            serving =
-                grams > 0 ? display(grams) + " g" : ml > 0 ? display(ml) + " ml" : "1 serving";
-          label(
-              facts,
-              base.equals("serving")
-                  ? "Per serving · " + serving
-                  : "Per " + display(f.getDouble("basis")) + " " + base,
-              14);
-          TextView calories = new TextView(this);
-          calories.setTextSize(32);
-          calories.setTypeface(null, android.graphics.Typeface.BOLD);
-          calories.setTextColor(0xff163d34);
-          facts.addView(calories);
-          String[] keys = {"protein", "carbs", "fat"}, names = {"Protein", "Carbohydrate", "Fat"};
-          TextView[] macros = new TextView[3];
-          for (int i = 0; i < 3; i++) {
-            android.view.View line = new android.view.View(this);
-            line.setBackgroundColor(0xff163d34);
-            facts.addView(line, new LinearLayout.LayoutParams(-1, dp(i == 0 ? 3 : 1)));
-            macros[i] = new TextView(this);
-            macros[i].setTextSize(18);
-            macros[i].setTextColor(0xff163d34);
-            macros[i].setPadding(0, dp(10), 0, dp(10));
-            facts.addView(macros[i]);
-          }
-          calories.setText(String.format(Locale.US, "Calories  %,.0f", f.getDouble("kcal")));
-          for (int i = 0; i < 3; i++)
-            macros[i].setText(
-                names[i] + "     " + String.format(Locale.US, "%.1f g", f.getDouble(keys[i])));
-          label(page, "How much are you adding?", 20);
           ArrayList<String> units = new ArrayList<>();
           if (base.equals("serving")
               || base.equals("g") && grams > 0
@@ -937,23 +981,84 @@ public class MainActivity extends ComponentActivity {
           ArrayList<String> unitLabels = new ArrayList<>();
           for (String u : units)
             unitLabels.add(
-                u.equals("serving") ? "Servings" : u.equals("g") ? "Grams" : "Milliliters");
+                u.equals("serving")
+                    ? "Serving"
+                        + (grams > 0
+                            ? " (" + display(grams) + " g)"
+                            : ml > 0 ? " (" + display(ml) + " ml)" : "")
+                    : u.equals("g") ? "Grams" : "Milliliters");
           unit.setAdapter(
-              new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, unitLabels));
-          page.addView(unit);
-          EditText amount =
-              field(
-                  page,
-                  "Quantity",
-                  units.get(0).equals("serving") ? "1" : display(f.getDouble("basis")));
+              new ArrayAdapter<String>(
+                  this, android.R.layout.simple_spinner_dropdown_item, unitLabels) {
+                @Override
+                public android.view.View getView(
+                    int position, android.view.View recycled, android.view.ViewGroup parent) {
+                  TextView v = (TextView) super.getView(position, recycled, parent);
+                  v.setTextColor(0xff80d6a2);
+                  v.setTextSize(18);
+                  v.setGravity(android.view.Gravity.CENTER);
+                  return v;
+                }
+              });
+          EditText amount = new EditText(this);
+          amount.setText(units.get(0).equals("serving") ? "1" : display(f.getDouble("basis")));
           amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+          amount.setTextSize(32);
+          amount.setTextColor(0xffffffff);
+          amount.setGravity(android.view.Gravity.CENTER);
+          amount.setSingleLine(true);
+          amount.setContentDescription("Portion quantity");
+          amount.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff80d6a2));
+          LinearLayout.LayoutParams amountParams = new LinearLayout.LayoutParams(dp(150), dp(64));
+          amountParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+          amountParams.topMargin = dp(16);
+          controls.addView(amount, amountParams);
           SeekBar slider = new SeekBar(this);
           slider.setMax(units.get(0).equals("serving") ? 79 : 1999);
-          page.addView(slider);
-          TextView total = new TextView(this);
-          total.setTextSize(18);
-          total.setTextColor(0xff163d34);
-          page.addView(total);
+          slider.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff80d6a2));
+          slider.setThumbTintList(android.content.res.ColorStateList.valueOf(0xff80d6a2));
+          slider.setContentDescription("Adjust portion quantity");
+          controls.addView(slider, new LinearLayout.LayoutParams(-1, dp(48)));
+          controls.addView(unit, new LinearLayout.LayoutParams(-1, dp(48)));
+          TextView total = portionText(controls, "", 14, false);
+          total.setTextColor(0xffb7b7bc);
+          total.setGravity(android.view.Gravity.CENTER);
+          LinearLayout macroCard = portionCard();
+          portionText(macroCard, "Macronutrients", 22, true);
+          TextView macroLegend = portionText(macroCard, "", 14, false);
+          LinearLayout macroBar = new LinearLayout(this);
+          macroBar.setOrientation(LinearLayout.HORIZONTAL);
+          macroCard.addView(macroBar, new LinearLayout.LayoutParams(-1, dp(12)));
+          android.view.View[] segments = new android.view.View[3];
+          int[] colors = {0xff1598aa, 0xfff3ad36, 0xffe7ce4f};
+          for (int i = 0; i < 3; i++) {
+            segments[i] = new android.view.View(this);
+            segments[i].setBackgroundColor(colors[i]);
+            macroBar.addView(segments[i], new LinearLayout.LayoutParams(0, -1, 1));
+          }
+          LinearLayout facts = macroCard;
+          portionText(facts, "Nutrition facts", 24, true);
+          String serving = f.optString("servingLabel", "");
+          if (serving.isEmpty() && base.equals("serving"))
+            serving =
+                grams > 0 ? display(grams) + " g" : ml > 0 ? display(ml) + " ml" : "1 serving";
+          portionText(
+              facts,
+              base.equals("serving")
+                  ? "1 serving · " + serving
+                  : "Per " + display(f.getDouble("basis")) + " " + base,
+              14,
+              false);
+          TextView selectedBasis = portionText(facts, "", 14, false);
+          TextView calories = portionRow(facts, "Calories", 28, true);
+          String[] keys = {"carbs", "fat", "protein"}, names = {"Carbohydrate", "Fat", "Protein"};
+          TextView[] macros = new TextView[3];
+          for (int i = 0; i < 3; i++) {
+            android.view.View line = new android.view.View(this);
+            line.setBackgroundColor(0xffaaaaaa);
+            facts.addView(line, new LinearLayout.LayoutParams(-1, dp(i == 0 ? 3 : 1)));
+            macros[i] = portionRow(facts, names[i], 18, false);
+          }
           final boolean[] updating = {false};
           final String[] previous = {units.get(0)};
           Runnable update =
@@ -963,14 +1068,44 @@ public class MainActivity extends ComponentActivity {
                   String selected = units.get(unit.getSelectedItemPosition());
                   double canonical = Portion.convert(value, selected, base, grams, ml);
                   double factor = canonical / f.getDouble("basis");
+                  selectedCalories.setText(
+                      String.format(Locale.US, "%,.0f Cal", f.getDouble("kcal") * factor));
                   total.setText(
-                      String.format(
-                          Locale.US,
-                          "Selected: %,.0f kcal · P %.1f g · C %.1f g · F %.1f g",
-                          f.getDouble("kcal") * factor,
-                          f.getDouble("protein") * factor,
-                          f.getDouble("carbs") * factor,
-                          f.getDouble("fat") * factor));
+                      selected.equals("serving")
+                          ? (grams > 0
+                              ? display(value * grams) + " g"
+                              : ml > 0 ? display(value * ml) + " ml" : "Label servings")
+                          : ((selected.equals("g") ? grams : ml) > 0
+                              ? display(value / (selected.equals("g") ? grams : ml)) + " servings"
+                              : ""));
+                  selectedBasis.setText(
+                      "Selected amount · "
+                          + display(value)
+                          + " "
+                          + (selected.equals("serving") ? "servings" : selected));
+                  calories.setText(String.format(Locale.US, "%,.0f", f.getDouble("kcal") * factor));
+                  double macroEnergy =
+                      f.getDouble("carbs") * 4
+                          + f.getDouble("fat") * 9
+                          + f.getDouble("protein") * 4;
+                  StringBuilder legend = new StringBuilder();
+                  for (int i = 0; i < 3; i++) {
+                    double nutrient = f.getDouble(keys[i]);
+                    macros[i].setText(String.format(Locale.US, "%.1f g", nutrient * factor));
+                    double percent =
+                        macroEnergy > 0 ? 100 * nutrient * (i == 1 ? 9 : 4) / macroEnergy : 0;
+                    segments[i].setLayoutParams(
+                        new LinearLayout.LayoutParams(0, -1, (float) (percent)));
+                    if (i > 0) legend.append("  ·  ");
+                    legend
+                        .append(i == 0 ? "Carb" : names[i])
+                        .append(" ")
+                        .append(Math.round(percent))
+                        .append("%");
+                  }
+                  macroBar.setVisibility(
+                      macroEnergy > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
+                  macroLegend.setText(macroEnergy > 0 ? legend.toString() : "No macro calories");
                   if (!updating[0]) {
                     updating[0] = true;
                     slider.setProgress(
@@ -979,6 +1114,7 @@ public class MainActivity extends ComponentActivity {
                   }
                 } catch (Exception invalid) {
                   total.setText("Enter a positive quantity");
+                  selectedCalories.setText("— Cal");
                 }
               };
           amount.addTextChangedListener(
@@ -1038,34 +1174,43 @@ public class MainActivity extends ComponentActivity {
                   update.run();
                 }
               });
-          button(
-              page,
-              addingIngredient ? "Add to dish" : "Log food",
+          LinearLayout more = new LinearLayout(this);
+          page.addView(more);
+          portionButton(
+              more,
+              "Edit nutrition / serving size",
+              false,
+              () -> foodEditor(new JSONObject(f.toString())));
+          if (!addingIngredient) {
+            LinearLayout saveOnly = new LinearLayout(this);
+            page.addView(saveOnly);
+            portionButton(
+                saveOnly,
+                "Save food only",
+                false,
+                () -> {
+                  db.save("food", f);
+                  foods();
+                });
+          }
+          portionButton(
+              footer,
+              "Cancel",
+              false,
+              () -> {
+                if (addingIngredient) batchForm();
+                else foods();
+              });
+          portionButton(
+              footer,
+              "Save",
+              true,
               () -> {
                 double canonical =
                     Portion.convert(
                         num(amount), units.get(unit.getSelectedItemPosition()), base, grams, ml);
                 if (canonical > 1000000) throw new Exception("Quantity is too large");
                 callback.done(canonical);
-              });
-          button(
-              page,
-              "Edit nutrition / serving size",
-              () -> foodEditor(new JSONObject(f.toString())));
-          if (!addingIngredient)
-            button(
-                page,
-                "Save food only",
-                () -> {
-                  db.save("food", f);
-                  foods();
-                });
-          button(
-              page,
-              "Cancel",
-              () -> {
-                if (addingIngredient) batchForm();
-                else foods();
               });
           update.run();
         });
