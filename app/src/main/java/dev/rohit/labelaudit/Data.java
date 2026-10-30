@@ -84,6 +84,26 @@ public final class Data extends SQLiteOpenHelper {
       if (kind.equals("direct")
           && (j.isNull("completed") || j.getLong("completed") != j.getLong("available")))
         throw new Exception("Direct consumption must be an instant");
+      JSONArray events = j.optJSONArray("eatingEvents");
+      if (events != null) {
+        if (!kind.equals("batch") || events.length() > 10000)
+          throw new Exception("Invalid eating sessions");
+        Set<String> eventIds = new HashSet<>();
+        double[] fractions = new double[events.length()];
+        for (int e = 0; e < events.length(); e++) {
+          JSONObject event = events.getJSONObject(e);
+          number(event, "fraction", 0.000000001, 1);
+          fractions[e] = event.getDouble("fraction");
+          String id = event.getString("id");
+          if (id.isEmpty() || !eventIds.add(id)) throw new Exception("Duplicate eating session");
+          number(
+              event,
+              "time",
+              j.getLong("available"),
+              j.isNull("completed") ? 32503680000000d : j.getLong("completed"));
+        }
+        RecordedPortions.total(fractions, j.getDouble("share"));
+      }
       JSONArray a = j.getJSONArray("ingredients");
       if (a.length() == 0 || a.length() > 1000) throw new Exception("Ingredients required");
       for (int i = 0; i < a.length(); i++) {
@@ -91,6 +111,9 @@ public final class Data extends SQLiteOpenHelper {
         validate("food", x.getJSONObject("food"));
         number(x, "quantity", 0.001, 1000000);
       }
+    } else if (kind.equals("calorie")) {
+      number(j, "time", 0, 32503680000000d);
+      number(j, "kcal", 0.001, 100000);
     } else if (kind.equals("settings")) {
       java.time.LocalDate.parse(j.getString("start"));
       number(j, "duration", 1, 720);
@@ -105,16 +128,17 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   public String backup() throws Exception {
-    JSONObject root = new JSONObject().put("schema", 1);
+    JSONObject root = new JSONObject().put("schema", 2);
     JSONArray rows = new JSONArray();
-    for (String k : new String[] {"food", "batch", "direct", "settings", "rate"})
+    for (String k : new String[] {"food", "batch", "direct", "calorie", "settings", "rate"})
       for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
     return root.put("records", rows).toString(2);
   }
 
   public void restore(String text) throws Exception {
     JSONObject root = new JSONObject(text);
-    if (root.getInt("schema") != 1) throw new Exception("Unsupported schema");
+    if (root.getInt("schema") != 1 && root.getInt("schema") != 2)
+      throw new Exception("Unsupported schema");
     JSONArray rows = root.getJSONArray("records");
     Set<String> ids = new HashSet<>();
     int settings = 0;

@@ -12,7 +12,10 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
   The detailed weekly view follows your configurable week-start setting; the home tile always starts Sunday.
 - Set your own expenditure in **Settings & backup**. Initial assumption is explicitly
   2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
-- **Scan food** or enter a barcode in **Foods**. Lookup uses Open Food Facts. Review
+- **Quick log** opens the camera. Scan a barcode, enter a barcode manually, or use
+  **Add calories** for a calorie-only record (for example, 120 kcal). These records
+  have unknown macros; the summary labels macro totals as incomplete when relevant.
+  They can be edited/deleted in History. Saved foods are under More. Lookup uses Open Food Facts. Review
   the product's nutrition basis and save; incomplete nutrition requires manual entry.
   Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
 - Scanned foods open a nutrition-label page, preferring the package serving size and
@@ -36,9 +39,20 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
   to the time you save; Change start time is an optional date/time picker.
   Each ingredient retains a complete nutrition snapshot.
   Edit ingredient quantities by removing and adding the ingredient again.
-- **Finished** is one tap and uses your existing share (initially 100%). Details allow
-  changing share, correcting timestamps, undoing completion, editing, duplicating,
-  and confirmed deletion. Duplicate batches have independent IDs/snapshots and 100% share.
+- **Ate** asks for a share of the whole dish. A slider snaps to common amounts
+  (10%, ¼, ⅓, ½, ⅔, ¾, and the remaining share); a percentage field accepts finer
+  amounts. Nutrition for every ingredient is scaled together. Exact thirds remain
+  exact internally even when displayed as 33.33%.
+- **Finished** asks to log the remaining share at the current time. Earlier portions
+  never change. If all of your share is already logged, it only marks completion.
+- New dishes use explicit portions from creation: no intake accrues until a portion
+  is recorded. Existing dishes retain their original linear accounting until Ate or
+  Finished switches them to explicit portions, preserving old history until you act.
+- Dish details let you correct/remove portions and timestamps. You cannot log beyond
+  your share of the batch. Undoing completion removes its automatically logged
+  remaining portion and reopens the batch. Duplication copies ingredients, not logs.
+- Editing ingredients intentionally updates that batch's nutrition totals; edits to
+  the saved food library never rewrite existing ingredient snapshots.
 - For a packaged/simple food, choose **Log food now** in Foods and enter its quantity.
 - Completed records remain in History. Saved foods and all accounting work offline.
 
@@ -46,24 +60,33 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
 
 SQLite `nutrition.db` schema version 2 stores authoritative JSON documents in a
 structured records table with stable IDs and explicit kinds: food, batch, direct,
-settings and effective-dated expenditure rate. SQLiteOpenHelper migrates version 1 to 2 by adding a kind index without changing facts;
+settings and effective-dated expenditure rate. Calorie-only records store an instant
+and energy without fabricated nutrient values. Batch eating events carry stable IDs
+and timestamps, and are included in backups. System Back navigates through prior screens, retaining in-memory inputs and scroll
+position. Saving returns to the parent screen and clears intermediate entry screens;
+only Back from home exits. A cooking draft is restored after activity recreation.
+
+SQLiteOpenHelper migrates version 1 to 2 by adding a kind index without changing facts;
 unsupported future migrations fail rather than discarding data. The prototype's
 separate `audit.db` is not imported or changed. No audit logs or images are collected.
 
 Batch facts: ingredient quantities and nutrition snapshots, actual availability,
-nullable actual completion, and consumed share. Direct food records are instantaneous.
-Policy settings are distinct from these facts: expected duration and `linear-v1` ID.
-`Estimator` is a pure replaceable calculation. No inferred consumption, meals,
-allocations, or aggregate caches are stored.
+nullable actual completion, consumed-share ceiling, and recorded portions (stable ID,
+actual timestamp, fraction of the whole batch, and whether Ate or Finished created
+it). Direct food and calorie-only records are instantaneous. Explicit portions are
+allocated once at their recorded times and never inferred or redistributed. Removing
+all portions from an explicit batch leaves zero intake rather than reactivating a
+linear estimate. Batch completion has no extra consumption charge beyond the
+confirmed remaining-portion record.
 
-Completed batches allocate total × share evenly across their actual interval;
-zero-duration intervals allocate once at completion. Unfinished batches allocate
-linearly across the expected duration (48 hours initially), clipped at the queried
-as-of time and capped at total × share. They remain provisional indefinitely until
-explicitly finished. Completion replaces the provisional calculation, so previous
-weeks may reconcile. Intervals and calendar views are half-open; timestamps are epoch
-milliseconds interpreted using the device's local timezone. Local calendar boundaries
-include DST. Changing device timezone changes calendar views, not recorded instants.
+The pure `RecordedPortions` calculator validates shares, computes remaining share,
+and aggregates recorded amounts over half-open date ranges. `Estimator` retains
+`linear-v1` for legacy batches and its duration setting. Completed legacy batches
+allocate over their actual interval; unfinished legacy batches remain provisional.
+No inferred consumption, meals, allocations, or aggregate caches are persisted.
+
+Calendar views use epoch-millisecond facts and the device timezone, including DST.
+Changing the device timezone changes calendar views, not recorded instants.
 
 Daily expenditure accrues by elapsed fraction of the local calendar day, including
 23/25-hour days. Effective-date rates preserve earlier assumptions. Nothing accrues
@@ -74,7 +97,8 @@ week-to-date, never an achieved full-week goal.
 
 ## Backup and privacy
 
-**Settings & backup → Export** writes a portable UTF-8 JSON file with schema version
+**Settings & backup → Export** writes a portable UTF-8 JSON file with backup schema 2
+(restore also accepts schema 1) and
 and authoritative records/settings using Android's document picker. **Restore** validates
 types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
 replacement. It replaces ALL tracker data after confirmation; it does not merge.
@@ -117,8 +141,9 @@ Network access is required for initial dependency downloads. Android Studio is o
 
 ## Validation limits
 
-Automated tests cover barcode extraction, allocation clipping/reconciliation, weekly
-boundary partitioning, instantaneous records, invalid intervals, DST, expenditure
+Automated tests cover barcode extraction, legacy allocation clipping/reconciliation, explicit portion limits and remaining
+shares, navigation history, weekly boundaries, instantaneous records, invalid
+intervals, DST, expenditure
 start dates and effective-date changes. Build/lint results are recorded in
 `BUILD_REPORT.txt`. Camera behavior, SQLite/backup document-picker flows and usability
 still need physical-device testing; this environment has no connected Android device.

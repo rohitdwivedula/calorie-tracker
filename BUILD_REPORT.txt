@@ -1,50 +1,32 @@
-Batch Nutrition V1 dashboard update (1.0.4, versionCode 6)
+Combined update — app 1.0.6, versionCode 8
+User authorized publication as GitHub release v0.1.6.
 
-Validation performed in this workspace:
+Changes:
+- Android Back navigation traverses retained screen states; only home Back exits.
+- Quick log launches camera with Add calories and manual barcode actions.
+- Calorie-only facts preserve unknown macros; compact summaries label exclusions.
+- Ate records an explicitly selected share of the whole batch at the tap time.
+- Discrete common-share slider plus editable percent; exact fractions retained.
+- Finished confirms logging only the remaining share now; never redistributes logs.
+- Undo completion removes its remaining-share event. Portions can be edited/removed.
+- New batches use explicit portions; legacy batches keep linear estimates until
+  switched by Ate or Finished. Duplicate batches do not copy consumption logs.
+- Nutrition snapshots and authoritative events included in backup schema 2;
+  schema 1 backups remain supported. No derived allocations are persisted.
+
+Validation:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
-- :app:assembleDebug, :app:testDebugUnitTest, :app:lintDebug passed.
-- 24 JUnit tests passed: 6 barcode, 7 allocation, 4 expenditure, 7 serving/conversion.
-- Lint: zero errors; warnings include retained dependency/target versions,
-  ARM64-only ChromeOS compatibility, backup configuration and untranslated strings.
-- APK signature verified (v2); zipalign -c -P 16 4 passed.
-- Schema v1 to v2 index migration SQL exercised with SQLite: existing row preserved.
+- assembleDebug, testDebugUnitTest, lintDebug passed.
+- 39 tests, 0 failures/errors: barcode, servings/conversions, linear allocation,
+  expenditure, navigation and explicit recorded portions.
+- APK signature verification and 16 KB page zip alignment checks passed.
 - git diff --check passed.
-- No Android device connected (adb devices empty).
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8169585
-SHA256: 1aeaae6c8bd610d90d1155ae59e95f55e20afa314b450df5a900ae177610c08a
+Bytes: 8187431
+SHA256: 15bfc134adadacab5984d45ce21654309571b72a7a9c2cd1dc23d79f8c7b5dbe
 
-Not verified on a device: camera and permission flows, Android SQLite lifecycle,
-backup picker/restore, keyboard/accessibility, process recreation, screen layout,
-and real-world Open Food Facts lookup. No claim of device testing is made.
-
-Recommended phone acceptance checks:
-1. Set expenditure, tracking start and week start; confirm initial balance.
-2. Scan a product; reject/deny camera permission and try manual lookup as well.
-3. Create/correct foods with missing nutrition; verify grams vs servings vs ml.
-4. Create a dish, reopen app, finish, adjust share, undo completion, duplicate.
-5. Correct availability/completion across week boundaries; verify reconciliation.
-6. Log a simple food directly; check history correction and confirmed deletion.
-7. Export, modify data, restore; repeat restore and verify no duplicate records.
-8. Try malformed backup; verify original history is retained.
-9. Enable airplane mode; verify foods, batches, completion and dashboard work.
-
-Dashboard update: three compact estimate tiles; Sunday-to-now home weekly balance.
-Detailed accounting moved to More → Nutrition details. No stored facts changed.
-
-Cooking-flow update: inline ingredient scan/manual/saved selection; automatic
-availability on save; optional native date/time picker; draft state retained across
-activity recreation; decimal keyboard for ingredient quantities. Build, tests, lint,
-APK signature and alignment checks repeated successfully. Phone UI testing pending.
-
-Serving-first update: live tomato endpoint inspected: serving_size 0.5 cup (121 g),
-25 kcal per serving; conflicting structured ml unit handled with explicit text g.
-Nutrition-label view uses per-serving fields where present and exact saved unit
-conversions. Slider/text quantity and live selected totals added. Build, 24 tests,
-lint, APK signature and alignment checks passed. Physical-device UI testing pending.
-
-Reference-layout update: dark portion cards, controls before nutrition details,
-serving selector includes mass/volume, live calories, macro calorie split and
-aligned nutrition rows; fixed Cancel/Save footer. Build, 24 tests, lint, signature
-and alignment checks passed. Screenshot/device layout verification remains pending.
+Limitations: no Android device attached. Layout, OS gestures, camera/permission,
+SQLite lifecycle and document-picker backup/restore require physical-device testing.
+The earlier v1→v2 index-migration SQL was tested independently with SQLite.
+Release asset checksum must match the validated APK checksum above.

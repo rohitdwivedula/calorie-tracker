@@ -32,12 +32,7 @@ public class CaptureActivity extends ComponentActivity {
           ok -> {
             if (ok) start();
             else {
-              Toast.makeText(
-                      this,
-                      "Camera permission denied. Use manual barcode entry in Foods.",
-                      Toast.LENGTH_LONG)
-                  .show();
-              finish();
+              hint.setText("Camera access is off. Use manual entry below.");
             }
           });
 
@@ -46,12 +41,32 @@ public class CaptureActivity extends ComponentActivity {
     LinearLayout root = new LinearLayout(this);
     root.setOrientation(LinearLayout.VERTICAL);
     hint = new TextView(this);
-    hint.setText("Point at a food barcode or supported product QR code");
+    hint.setText("Scan a barcode");
     hint.setTextSize(20);
     root.addView(hint);
     preview = new PreviewView(this);
     preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
     root.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+    if (getIntent().getBooleanExtra("quick_log", false)) {
+      Button calories = new Button(this);
+      calories.setText("Add calories");
+      root.addView(calories);
+      calories.setOnClickListener(
+          v -> {
+            done = true;
+            setResult(RESULT_OK, new Intent().putExtra("action", "calories"));
+            finish();
+          });
+    }
+    Button manual = new Button(this);
+    manual.setText("Enter barcode");
+    root.addView(manual);
+    manual.setOnClickListener(
+        v -> {
+          done = true;
+          setResult(RESULT_OK, new Intent().putExtra("action", "manual_barcode"));
+          finish();
+        });
     Button cancel = new Button(this);
     cancel.setText("Cancel");
     cancel.setOnClickListener(v -> finish());
