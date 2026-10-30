@@ -1,0 +1,12 @@
+Label Audit 0.1.0 build verification
+
+- Clean Android debug APK build succeeded with JDK 17 / Gradle 8.9 / AGP 8.7.3.
+- All 8 JUnit tests passed (barcode extraction and streaming TAR correctness).
+- Independent Python tarfile reader opened a Java-written .tar.gz fixture; original user JPEG was preserved byte-for-byte and Unicode OCR text survived.
+- APK signature verified with apksigner.
+- APK zip alignment verified. All four ARM64 native libraries have 16 KB ELF LOAD alignment.
+- Manifest verified: launchable MainActivity, min SDK 26, target SDK 34, ARM64.
+- No physical-device, camera, OCR-accuracy, SQLite instrumentation or Android share-picker testing performed in this environment.
+- Open Food Facts endpoint was tested separately with the user's tomato barcode earlier in this conversation.
+
+APK SHA-256: cb1bde3db8a1f0b3fb91c912f3117db1306401ed587c50a8edb413280c055bcd
