@@ -6,23 +6,129 @@ import android.database.sqlite.*;
 import java.util.*;
 import org.json.*;
 
-/** Authoritative documents only; estimates are never persisted. Versioned SQLite schema. */
+/** Versioned recorded facts and separate raw provider responses; estimates are never persisted. */
 public final class Data extends SQLiteOpenHelper {
   public Data(Context c) {
-    super(c, "nutrition.db", null, 2);
+    super(c, "nutrition.db", null, 3);
   }
 
   public void onCreate(SQLiteDatabase d) {
     d.execSQL("CREATE TABLE records(id TEXT PRIMARY KEY, kind TEXT NOT NULL, body TEXT NOT NULL)");
     d.execSQL("CREATE INDEX records_kind ON records(kind)");
+    createLookups(d);
+  }
+
+  private static void createLookups(SQLiteDatabase d) {
+    d.execSQL(
+        "CREATE TABLE lookups(id TEXT PRIMARY KEY, barcode TEXT NOT NULL, retrieved_at INTEGER NOT"
+            + " NULL, url TEXT NOT NULL, payload TEXT NOT NULL, sha256 TEXT NOT NULL)");
   }
 
   public void onUpgrade(SQLiteDatabase d, int a, int b) {
-    if (a == 1 && b == 2) {
-      d.execSQL("CREATE INDEX IF NOT EXISTS records_kind ON records(kind)");
-      return;
+    if (a < 1 || b != 3) throw new IllegalStateException("Unsupported migration " + a + " to " + b);
+    if (a < 2) d.execSQL("CREATE INDEX IF NOT EXISTS records_kind ON records(kind)");
+    if (a < 3) createLookups(d);
+  }
+
+  public static final int MAX_LOOKUP_BYTES = 1024 * 1024, MAX_BACKUP_BYTES = 64 * 1024 * 1024;
+
+  static String payloadHash(String text) throws Exception {
+    byte[] digest =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    StringBuilder hex = new StringBuilder();
+    for (byte b : digest) hex.append(String.format(java.util.Locale.US, "%02x", b & 255));
+    return hex.toString();
+  }
+
+  static void validateLookup(JSONObject j) throws Exception {
+    String code = j.getString("barcode"),
+        url = j.getString("url"),
+        payload = j.getString("payload");
+    if (j.getString("id").isEmpty() || !code.equals(BarcodeValue.productCode(code)))
+      throw new Exception("Invalid lookup identity");
+    String endpoint = "https://world.openfoodfacts.org/api/v2/product/" + code + ".json";
+    if (!url.equals(endpoint) && !url.startsWith(endpoint + "?"))
+      throw new Exception("Invalid lookup source");
+    number(j, "retrievedAt", 0, 32503680000000d);
+    if (payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_LOOKUP_BYTES)
+      throw new Exception("Lookup payload too large");
+    new JSONObject(payload);
+    if (!payloadHash(payload).equals(j.getString("sha256")))
+      throw new Exception("Lookup checksum mismatch");
+  }
+
+  private void insertLookup(JSONObject j) throws Exception {
+    validateLookup(j);
+    ContentValues v = new ContentValues();
+    v.put("id", j.getString("id"));
+    v.put("barcode", j.getString("barcode"));
+    v.put("retrieved_at", j.getLong("retrievedAt"));
+    v.put("url", j.getString("url"));
+    v.put("payload", j.getString("payload"));
+    v.put("sha256", j.getString("sha256"));
+    getWritableDatabase().insertOrThrow("lookups", null, v);
+  }
+
+  public String cacheLookup(String barcode, String url, String payload) throws Exception {
+    JSONObject j =
+        new JSONObject()
+            .put("id", UUID.randomUUID().toString())
+            .put("barcode", barcode)
+            .put("retrievedAt", System.currentTimeMillis())
+            .put("url", url)
+            .put("payload", payload)
+            .put("sha256", payloadHash(payload));
+    insertLookup(j);
+    return j.getString("id");
+  }
+
+  public JSONArray lookupArchive() throws Exception {
+    JSONArray out = new JSONArray();
+    try (Cursor c =
+        getReadableDatabase()
+            .rawQuery(
+                "SELECT id,barcode,retrieved_at,url,payload,sha256 FROM lookups ORDER BY"
+                    + " retrieved_at",
+                null)) {
+      while (c.moveToNext())
+        out.put(
+            new JSONObject()
+                .put("id", c.getString(0))
+                .put("barcode", c.getString(1))
+                .put("retrievedAt", c.getLong(2))
+                .put("url", c.getString(3))
+                .put("payload", c.getString(4))
+                .put("sha256", c.getString(5)));
     }
-    throw new IllegalStateException("Unsupported migration " + a + " to " + b);
+    return out;
+  }
+
+  static void validateLookupReferences(JSONArray records, JSONArray lookups) throws Exception {
+    Map<String, String> ids = new HashMap<>();
+    for (int i = 0; i < lookups.length(); i++) {
+      JSONObject j = lookups.getJSONObject(i);
+      validateLookup(j);
+      if (ids.put(j.getString("id"), j.getString("barcode")) != null)
+        throw new Exception("Duplicate lookup ID");
+    }
+    for (int i = 0; i < records.length(); i++) {
+      JSONObject row = records.getJSONObject(i), data = row.getJSONObject("data");
+      String kind = row.getString("kind");
+      if (kind.equals("food")) validateFoodLookup(data, ids);
+      else if (kind.equals("batch") || kind.equals("direct")) {
+        JSONArray a = data.getJSONArray("ingredients");
+        for (int k = 0; k < a.length(); k++)
+          validateFoodLookup(a.getJSONObject(k).getJSONObject("food"), ids);
+      }
+    }
+  }
+
+  private static void validateFoodLookup(JSONObject food, Map<String, String> ids)
+      throws Exception {
+    if (food.has("lookupId")
+        && !food.optString("barcode").equals(ids.get(food.getString("lookupId"))))
+      throw new Exception("Missing or mismatched lookup reference");
   }
 
   public List<JSONObject> list(String kind) {
@@ -70,6 +176,8 @@ public final class Data extends SQLiteOpenHelper {
     if (kind.equals("food")) {
       if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       number(j, "basis", 0.001, 100000);
+      for (int n = 4; n < Nutrients.KEYS.length; n++)
+        if (j.has(Nutrients.KEYS[n])) number(j, Nutrients.KEYS[n], 0, 100000);
       if (j.has("servingGrams")) number(j, "servingGrams", 0.001, 100000);
       if (j.has("servingMl")) number(j, "servingMl", 0.001, 100000);
       if (!Arrays.asList("g", "serving", "ml").contains(j.getString("unit")))
@@ -117,6 +225,12 @@ public final class Data extends SQLiteOpenHelper {
     } else if (kind.equals("settings")) {
       java.time.LocalDate.parse(j.getString("start"));
       number(j, "duration", 1, 720);
+      if (j.has("nutrientGoals")) {
+        JSONObject goals = j.getJSONObject("nutrientGoals");
+        for (int i = 1; i < Nutrients.KEYS.length; i++)
+          if (goals.has(Nutrients.KEYS[i])) number(goals, Nutrients.KEYS[i], 0.000000001, 100000);
+      }
+
       number(j, "week", 1, 7);
       number(j, "goal", 0, 70000);
       if (!Estimator.POLICY.equals(j.getString("policy")))
@@ -128,18 +242,23 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   public String backup() throws Exception {
-    JSONObject root = new JSONObject().put("schema", 2);
+    JSONObject root = new JSONObject().put("schema", 3);
     JSONArray rows = new JSONArray();
     for (String k : new String[] {"food", "batch", "direct", "calorie", "settings", "rate"})
       for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
-    return root.put("records", rows).toString(2);
+    String result = root.put("records", rows).put("lookups", lookupArchive()).toString(2);
+    if (result.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BACKUP_BYTES)
+      throw new Exception("Backup exceeds 64 MB limit");
+    return result;
   }
 
   public void restore(String text) throws Exception {
     JSONObject root = new JSONObject(text);
-    if (root.getInt("schema") != 1 && root.getInt("schema") != 2)
+    if (root.getInt("schema") < 1 || root.getInt("schema") > 3)
       throw new Exception("Unsupported schema");
     JSONArray rows = root.getJSONArray("records");
+    JSONArray lookups = root.has("lookups") ? root.getJSONArray("lookups") : new JSONArray();
+    validateLookupReferences(rows, lookups);
     Set<String> ids = new HashSet<>();
     int settings = 0;
     Set<String> dates = new HashSet<>();
@@ -175,6 +294,8 @@ public final class Data extends SQLiteOpenHelper {
     d.beginTransaction();
     try {
       d.delete("records", null, null);
+      d.delete("lookups", null, null);
+      for (int i = 0; i < lookups.length(); i++) insertLookup(lookups.getJSONObject(i));
       for (int i = 0; i < rows.length(); i++) {
         JSONObject r = rows.getJSONObject(i);
         save(r.getString("kind"), r.getJSONObject("data"));

@@ -58,6 +58,28 @@ public class CaptureActivity extends ComponentActivity {
             finish();
           });
     }
+    if (getIntent().getBooleanExtra("ingredient", false)) {
+      LinearLayout options = new LinearLayout(this);
+      root.addView(options);
+      Button saved = new Button(this);
+      saved.setText("Saved foods");
+      options.addView(saved, new LinearLayout.LayoutParams(0, -2, 1));
+      saved.setOnClickListener(
+          v -> {
+            done = true;
+            setResult(RESULT_OK, new Intent().putExtra("action", "saved_foods"));
+            finish();
+          });
+      Button manualFood = new Button(this);
+      manualFood.setText("Manual food");
+      options.addView(manualFood, new LinearLayout.LayoutParams(0, -2, 1));
+      manualFood.setOnClickListener(
+          v -> {
+            done = true;
+            setResult(RESULT_OK, new Intent().putExtra("action", "manual_food"));
+            finish();
+          });
+    }
     Button manual = new Button(this);
     manual.setText("Enter barcode");
     root.addView(manual);

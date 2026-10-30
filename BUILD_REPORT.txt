@@ -1,32 +1,58 @@
-Combined update — app 1.0.6, versionCode 8
-User authorized publication as GitHub release v0.1.6.
+App 1.0.7, versionCode 9 — approved for GitHub release v0.1.7
+User authorized publishing the APK and enriched backup together.
 
 Changes:
-- Android Back navigation traverses retained screen states; only home Back exits.
-- Quick log launches camera with Add calories and manual barcode actions.
-- Calorie-only facts preserve unknown macros; compact summaries label exclusions.
-- Ate records an explicitly selected share of the whole batch at the tap time.
-- Discrete common-share slider plus editable percent; exact fractions retained.
-- Finished confirms logging only the remaining share now; never redistributes logs.
-- Undo completion removes its remaining-share event. Portions can be edited/removed.
-- New batches use explicit portions; legacy batches keep linear estimates until
-  switched by Ate or Finished. Duplicate batches do not copy consumption logs.
-- Nutrition snapshots and authoritative events included in backup schema 2;
-  schema 1 backups remain supported. No derived allocations are persisted.
+- Dark application theme, dialogs, forms and system bars.
+- Portion slider spans 1–8 servings in quarter-serving steps. Text accepts larger
+  quantities and fractional servings. Calories and macros update live.
+- Add ingredient launches camera directly with Saved foods/Manual food fallbacks.
+  Camera cancellation returns to the dish. Save dish renamed Done cooking.
+- History combines actual dish-portion events, direct foods and calorie-only logs,
+  newest first, with date groups, HH:mm times, named tiles and kcal/protein/fiber.
+  Legacy completion entries are labeled estimates. ListView recycles visible rows;
+  UI loads 25 more entries as needed. Record models are assembled in memory from
+  authoritative SQLite documents before pagination; this is not a SQL cursor feed.
+- Today card displays calories, protein and fiber with coverage/goal information.
+- Stats: last 7/30 completed tracked days, per-nutrient daily averages, editable
+  daily minimum goals (sodium is a maximum), days met and unknown-day counts.
+  These are user targets, not personalized RDAs. Averages and goal counts exclude
+  days with missing values for that nutrient; today is excluded.
+- OFF lookup retains optional fiber, vitamins and minerals using normalized gram
+  fields; displayed micronutrients convert to mg/µg. Optional manual correction.
+  Existing snapshots stay unchanged. Missing values are not silently made zero.
+- Goals and optional nutrients remain in authoritative JSON database documents
+  and are included in portable backups. No derived caches or extra uploads.
 
 Validation:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
-- assembleDebug, testDebugUnitTest, lintDebug passed.
-- 39 tests, 0 failures/errors: barcode, servings/conversions, linear allocation,
-  expenditure, navigation and explicit recorded portions.
-- APK signature verification and 16 KB page zip alignment checks passed.
+- assembleDebug, testDebugUnitTest and lintDebug passed (lint warnings remain).
+- 59 tests passed, zero failures/errors. Added tests cover missing vs zero nutrient
+  values, partial coverage, complete-day averages, units, limits and slider range.
+- APK signature and 16 KB page zip alignment checks passed.
 - git diff --check passed.
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8187431
-SHA256: 15bfc134adadacab5984d45ce21654309571b72a7a9c2cd1dc23d79f8c7b5dbe
+Bytes: 8545963
+SHA256: d0b7741fe7969e1ecb6b7e59c405c66c464f922d41f2ff7a8e811874ad78d8dd
 
-Limitations: no Android device attached. Layout, OS gestures, camera/permission,
-SQLite lifecycle and document-picker backup/restore require physical-device testing.
-The earlier v1→v2 index-migration SQL was tested independently with SQLite.
-Release asset checksum must match the validated APK checksum above.
+Limits: no Android device attached. Theme/layout, OS gestures, camera permissions,
+large-history scrolling, SQLite lifecycle and backup/restore need phone testing.
+Old ingredient snapshots may lack fiber/vitamins; rescan and save for future use,
+or explicitly edit a batch ingredient. Historical snapshots are not overwritten.
+The enriched backup is attached only as an explicitly requested release asset;
+exports, databases, signing keys and personal data remain excluded from Git.
+
+User-supplied backup enrichment prepared outside Git and validated using the app
+Data.validate method, including nested snapshots. Original fields preserved.
+Requested backup release asset is listed in ignored pending-release-assets.json;
+no personal data or export files are committed. Publication approved by user for v0.1.7.
+
+Raw response archive update (included in this approved release):
+- SQLite schema 3 adds a separate lookup table; food/snapshots retain references.
+- Complete JSON text, barcode, URL, retrieval time and checksum are preserved.
+- Backup schema 3 includes responses; older schemas 1/2 remain supported.
+- Tests cover unknown-field/Unicode preservation, JSON round-trip, checksums,
+  missing/mismatched refs, duplicate IDs, size limits and old unreferenced foods.
+- Actual migration table SQL was exercised with SQLite; existing records preserved.
+- Enriched private backup validated against actual app record/reference validators.
+- Final build, all 59 unit tests, lint, APK signature and alignment checks passed.

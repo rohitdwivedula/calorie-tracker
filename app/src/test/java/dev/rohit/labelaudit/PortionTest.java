@@ -6,6 +6,19 @@ import org.junit.Test;
 
 public class PortionTest {
   @Test
+  public void servingSliderIsOneToEight() {
+    assertEquals(1, Portion.servingSliderValue(0), 0);
+    assertEquals(8, Portion.servingSliderValue(28), 0);
+    assertEquals(2.5, Portion.servingSliderValue(6), 0);
+  }
+
+  @Test
+  public void largerTypedQuantitiesRemainValid() {
+    assertEquals(28, Portion.servingSliderProgress(12));
+    assertEquals(12, Portion.convert(12, "serving", "serving", 57, 0), 0);
+  }
+
+  @Test
   public void extractsPrintedServingGrams() {
     assertEquals(57, Portion.labelAmount("2 oz (57 g)", "g"), 0);
     assertEquals(121, Portion.labelAmount("0.5 cup (121 g)", "g"), 0);

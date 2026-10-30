@@ -48,6 +48,10 @@ public class MainActivity extends ComponentActivity {
   void navigateBack() {
     Navigation.Entry<ScreenState> previous = navigation.back();
     if (previous == null) return;
+    if (previous.route.equals("Today")) {
+      safe(this::home);
+      return;
+    }
     ScreenState state = previous.state;
     currentRoute = previous.route;
     currentRoot = state.root;
@@ -66,12 +70,9 @@ public class MainActivity extends ComponentActivity {
       cooking = false;
       addingIngredient = false;
     }
-    boolean dark = currentRoute.startsWith("portion:");
-    getWindow().setStatusBarColor(dark ? 0xff080808 : 0xfff4f5ef);
-    getWindow().setNavigationBarColor(dark ? 0xff080808 : 0xfff4f5ef);
-    getWindow()
-        .getDecorView()
-        .setSystemUiVisibility(dark ? 0 : android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    getWindow().setStatusBarColor(0xff080808);
+    getWindow().setNavigationBarColor(0xff080808);
+    getWindow().getDecorView().setSystemUiVisibility(0);
     setContentView(currentRoot);
     backNavigation.setEnabled(navigation.canGoBack());
     android.view.View focus = getCurrentFocus();
@@ -109,12 +110,19 @@ public class MainActivity extends ComponentActivity {
       registerForActivityResult(
           new ActivityResultContracts.StartActivityForResult(),
           r -> {
+            boolean wasDirect = this.ingredientCameraDirect;
+            this.ingredientCameraDirect = false;
             if (r.getResultCode() == RESULT_OK && r.getData() != null) {
               String action = r.getData().getStringExtra("action");
               if ("calories".equals(action)) safe(() -> calorieEditor(null));
               else if ("manual_barcode".equals(action)) manualBarcode();
+              else if ("manual_food".equals(action)) safe(() -> foodEditor(obj()));
+              else if ("saved_foods".equals(action)) safe(this::ingredientPicker);
               else lookup(r.getData().getStringExtra("raw_code"));
-            } else if (this.addingIngredient) safe(this::ingredientPicker);
+            } else if (this.addingIngredient) {
+              if (wasDirect) safe(this::batchForm);
+              else safe(this::ingredientPicker);
+            }
           });
   ActivityResultLauncher<String> export =
       registerForActivityResult(
@@ -142,7 +150,8 @@ public class MainActivity extends ComponentActivity {
                       byte[] b = new byte[8192];
                       int n;
                       while ((n = in.read(b)) != -1) {
-                        if (out.size() + n > 10000000) throw new Exception("Backup too large");
+                        if (out.size() + n > Data.MAX_BACKUP_BYTES)
+                          throw new Exception("Backup too large");
                         out.write(b, 0, n);
                       }
                       text = out.toString("UTF-8");
@@ -203,6 +212,7 @@ public class MainActivity extends ComponentActivity {
             draft = new JSONArray(b.getString("ingredientsDraft"));
             cooking = true;
             addingIngredient = b.getBoolean("addingIngredient");
+            ingredientCameraDirect = b.getBoolean("ingredientCameraDirect");
             batchForm();
           } else home();
         });
@@ -224,13 +234,11 @@ public class MainActivity extends ComponentActivity {
   }
 
   void screen(String title, String route) {
-    getWindow().setStatusBarColor(0xfff4f5ef);
-    getWindow().setNavigationBarColor(0xfff4f5ef);
-    getWindow()
-        .getDecorView()
-        .setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+    getWindow().setStatusBarColor(0xff080808);
+    getWindow().setNavigationBarColor(0xff080808);
+    getWindow().getDecorView().setSystemUiVisibility(0);
     page = layout();
-    page.setBackgroundColor(0xfff5f5ed);
+    page.setBackgroundColor(0xff080808);
     ScrollView s = new ScrollView(this);
     s.addView(page);
     present(s, route);
@@ -241,7 +249,7 @@ public class MainActivity extends ComponentActivity {
     TextView v = new TextView(this);
     v.setText(t);
     v.setTextSize(size);
-    v.setTextColor(0xff163d34);
+    v.setTextColor(size <= 14 ? 0xffaaaab0 : 0xfff5f5f5);
     v.setPadding(0, 10, 0, 10);
     l.addView(v);
   }
@@ -249,6 +257,7 @@ public class MainActivity extends ComponentActivity {
   void button(LinearLayout l, String title, Action a) {
     Button b = new Button(this);
     b.setText(title);
+    b.setAllCaps(false);
     l.addView(b);
     b.setOnClickListener(v -> safe(a));
   }
@@ -345,6 +354,64 @@ public class MainActivity extends ComponentActivity {
     return sum;
   }
 
+  double[] nutrientValues(JSONObject food) {
+    double[] values = new double[Nutrients.KEYS.length];
+    for (int i = 0; i < values.length; i++)
+      values[i] =
+          food.has(Nutrients.KEYS[i]) ? food.optDouble(Nutrients.KEYS[i], Double.NaN) : Double.NaN;
+    return values;
+  }
+
+  Nutrients.Total batchNutrients(JSONObject batch, double fraction) throws Exception {
+    Nutrients.Total result = new Nutrients.Total();
+    JSONArray ingredients = batch.getJSONArray("ingredients");
+    for (int i = 0; i < ingredients.length(); i++) {
+      JSONObject item = ingredients.getJSONObject(i), food = item.getJSONObject("food");
+      result.add(
+          nutrientValues(food), fraction * item.getDouble("quantity") / food.getDouble("basis"));
+    }
+    return result;
+  }
+
+  Nutrients.Total nutrientTotals(long from, long to, long now) throws Exception {
+    Nutrients.Total result = new Nutrients.Total();
+    for (String kind : new String[] {"batch", "direct"})
+      for (JSONObject batch : db.list(kind)) {
+        double fraction = batchFraction(batch, from, to, now);
+        if (fraction <= 0) continue;
+        JSONArray ingredients = batch.getJSONArray("ingredients");
+        for (int i = 0; i < ingredients.length(); i++) {
+          JSONObject item = ingredients.getJSONObject(i), food = item.getJSONObject("food");
+          result.add(
+              nutrientValues(food),
+              fraction * item.getDouble("quantity") / food.getDouble("basis"));
+        }
+      }
+    for (JSONObject entry : db.list("calorie")) {
+      long t = entry.getLong("time");
+      if (t >= from && t < Math.min(to, now)) {
+        double[] n = new double[Nutrients.KEYS.length];
+        Arrays.fill(n, Double.NaN);
+        n[0] = entry.getDouble("kcal");
+        result.add(n, 1);
+      }
+    }
+    return result;
+  }
+
+  String nutrientText(Nutrients.Total total, int i) {
+    if (total.missing[i] && !total.known[i]) return "—";
+    return (total.missing[i] ? "≥" : "")
+        + display(total.values[i] * Nutrients.displayFactor(i))
+        + " "
+        + Nutrients.unit(i);
+  }
+
+  double goal(int i) {
+    JSONObject goals = settings.optJSONObject("nutrientGoals");
+    return goals == null ? 0 : goals.optDouble(Nutrients.KEYS[i], 0);
+  }
+
   double rate(LocalDate date) throws Exception {
     String best = "";
     double value = 0;
@@ -383,7 +450,7 @@ public class MainActivity extends ComponentActivity {
     box.setPadding(dp(18), dp(8), dp(18), dp(8));
     android.graphics.drawable.GradientDrawable background =
         new android.graphics.drawable.GradientDrawable();
-    background.setColor(0xffffffff);
+    background.setColor(0xff19191b);
     background.setCornerRadius(dp(18));
     box.setBackground(background);
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
@@ -399,7 +466,7 @@ public class MainActivity extends ComponentActivity {
     number.setText(String.format(Locale.US, "%,.0f kcal", Math.abs(value)));
     number.setTextSize(30);
     number.setTypeface(null, android.graphics.Typeface.BOLD);
-    number.setTextColor(0xff163d34);
+    number.setTextColor(0xfff5f5f5);
     box.addView(number);
     label(box, caption, 12);
     box.setContentDescription(title + ", " + number.getText() + ", " + caption);
@@ -410,7 +477,7 @@ public class MainActivity extends ComponentActivity {
   void home() throws Exception {
     cooking = false;
     addingIngredient = false;
-    screen("Today", "Today");
+    screen("Nutrition", "Today");
     long now = System.currentTimeMillis();
     LocalDate today = LocalDate.now(zone);
     long start = midnight(LocalDate.parse(settings.getString("start")));
@@ -420,7 +487,26 @@ public class MainActivity extends ComponentActivity {
     double daily = intake(dayStart, now, now)[0];
     double dailyBalance = expenditure(dayStart, now) - daily;
     double weeklyBalance = expenditure(weekStart, now) - intake(weekStart, now, now)[0];
-    tile("Estimated intake · today", daily, "So far today");
+    Nutrients.Total todayTotals = nutrientTotals(dayStart, now, now);
+    LinearLayout todayCard = card(page);
+    label(todayCard, "Today", 22);
+    TextView energy = new TextView(this);
+    energy.setText(String.format(Locale.US, "%,.0f kcal", daily));
+    energy.setTextSize(30);
+    energy.setTextColor(0xffaaaab0);
+    todayCard.addView(energy);
+    metricRow(
+        todayCard,
+        "Protein",
+        nutrientText(todayTotals, 1) + (goal(1) > 0 ? " / " + display(goal(1)) + " g" : ""));
+    metricRow(
+        todayCard,
+        "Fiber",
+        nutrientText(todayTotals, 4) + (goal(4) > 0 ? " / " + display(goal(4)) + " g" : ""));
+    if (todayTotals.missing[1] || todayTotals.missing[4])
+      label(todayCard, "Some nutrition is missing · ≥ is a known minimum", 12);
+    todayCard.setOnClickListener(v -> safe(this::stats));
+
     tile(
         "Estimated " + (dailyBalance >= 0 ? "deficit" : "surplus") + " · today",
         dailyBalance,
@@ -457,7 +543,7 @@ public class MainActivity extends ComponentActivity {
         TextView name = new TextView(this);
         name.setText(batch.getString("name"));
         name.setTextSize(18);
-        name.setTextColor(0xff163d34);
+        name.setTextColor(0xfff5f5f5);
         name.setPadding(0, dp(12), dp(8), dp(12));
         dish.addView(name, 0, new LinearLayout.LayoutParams(-1, -2));
         name.setOnClickListener(v -> safe(() -> details(batch, "batch")));
@@ -476,6 +562,10 @@ public class MainActivity extends ComponentActivity {
       }
     if (count == 0) label(page, "Your dishes will appear here.", 14);
 
+    LinearLayout shortcuts = new LinearLayout(this);
+    page.addView(shortcuts);
+    portionButton(shortcuts, "History", false, this::history);
+    portionButton(shortcuts, "Stats", false, this::stats);
     button(
         page,
         "More",
@@ -503,12 +593,12 @@ public class MainActivity extends ComponentActivity {
     TextView left = new TextView(this);
     left.setText(title);
     left.setTextSize(15);
-    left.setTextColor(0xff54665e);
+    left.setTextColor(0xffaaaab0);
     row.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
     TextView right = new TextView(this);
     right.setText(value);
     right.setTextSize(17);
-    right.setTextColor(0xff163d34);
+    right.setTextColor(0xfff5f5f5);
     right.setTypeface(null, android.graphics.Typeface.BOLD);
     row.addView(right);
   }
@@ -720,6 +810,7 @@ public class MainActivity extends ComponentActivity {
       return;
     }
     toast("Looking up product…");
+    final String[] lookupId = {null};
     new Thread(
             () -> {
               try {
@@ -736,10 +827,13 @@ public class MainActivity extends ComponentActivity {
                   byte[] buf = new byte[4096];
                   int n;
                   while ((n = in.read(buf)) != -1) {
-                    if (out.size() > 2000000) throw new Exception("Response too large");
+                    if (out.size() + n > Data.MAX_LOOKUP_BYTES)
+                      throw new Exception("Response too large");
                     out.write(buf, 0, n);
                   }
-                  JSONObject response = new JSONObject(out.toString("UTF-8"));
+                  String rawResponse = out.toString("UTF-8");
+                  lookupId[0] = db.cacheLookup(code, c.getURL().toString(), rawResponse);
+                  JSONObject response = new JSONObject(rawResponse);
                   if (response.optInt("status") != 1)
                     throw new Exception("Unknown product; create it manually");
                   product = response.getJSONObject("product");
@@ -747,7 +841,10 @@ public class MainActivity extends ComponentActivity {
                   c.disconnect();
                 }
                 JSONObject f =
-                    obj().put("barcode", code).put("name", product.optString("product_name", ""));
+                    obj()
+                        .put("barcode", code)
+                        .put("lookupId", lookupId[0])
+                        .put("name", product.optString("product_name", ""));
                 JSONObject nutrients = product.optJSONObject("nutriments");
                 String servingLabel = product.optString("serving_size", "");
                 double grams = Portion.labelAmount(servingLabel, "g"),
@@ -775,9 +872,8 @@ public class MainActivity extends ComponentActivity {
                 if (ml > 0) f.put("servingMl", ml);
                 f.put("servingLabel", servingLabel);
                 if (nutrients != null) {
-                  String[] source = {"energy-kcal", "proteins", "carbohydrates", "fat"},
-                      dest = {"kcal", "protein", "carbs", "fat"};
-                  for (int i = 0; i < 4; i++) {
+                  String[] source = Nutrients.OFF_KEYS, dest = Nutrients.KEYS;
+                  for (int i = 0; i < source.length; i++) {
                     if (hasServing && nutrients.has(source[i] + "_serving"))
                       f.put(dest[i], nutrients.getDouble(source[i] + "_serving"));
                     else if (nutrients.has(source[i] + "_100g")) {
@@ -800,7 +896,13 @@ public class MainActivity extends ComponentActivity {
                             .setMessage(e.getMessage() + ". Saved foods work offline.")
                             .setPositiveButton(
                                 "Manual food",
-                                (d, w) -> safe(() -> foodEditor(obj().put("barcode", code))))
+                                (d, w) ->
+                                    safe(
+                                        () ->
+                                            foodEditor(
+                                                obj()
+                                                    .put("barcode", code)
+                                                    .put("lookupId", lookupId[0]))))
                             .setNegativeButton("Cancel", null)
                             .show());
               }
@@ -863,6 +965,31 @@ public class MainActivity extends ComponentActivity {
               page,
               names[i],
               f.has(keys[i]) ? f.optString(keys[i]) : i == 1 ? "100" : i == 2 ? "g" : "");
+    EditText[] optional = new EditText[Nutrients.KEYS.length];
+    optional[4] =
+        field(page, "Fiber (g, optional)", f.has("fiber") ? display(f.optDouble("fiber")) : "");
+    optional[4].setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+    LinearLayout extra = layout();
+    page.addView(extra);
+    extra.setVisibility(android.view.View.GONE);
+    for (int n = 5; n < Nutrients.KEYS.length; n++) {
+      optional[n] =
+          field(
+              extra,
+              Nutrients.NAMES[n] + " (" + Nutrients.unit(n) + ", optional)",
+              f.has(Nutrients.KEYS[n])
+                  ? display(f.optDouble(Nutrients.KEYS[n]) * Nutrients.displayFactor(n))
+                  : "");
+      optional[n].setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+    }
+    button(
+        page,
+        "Vitamins & minerals (optional)",
+        () ->
+            extra.setVisibility(
+                extra.getVisibility() == android.view.View.VISIBLE
+                    ? android.view.View.GONE
+                    : android.view.View.VISIBLE));
     EditText servingGrams =
         field(
             page,
@@ -880,6 +1007,15 @@ public class MainActivity extends ComponentActivity {
           JSONObject j = new JSONObject(f.toString());
           for (int i = 0; i < 7; i++)
             j.put(keys[i], i == 0 || i == 2 ? e[i].getText().toString().trim() : num(e[i]));
+          for (int n = 4; n < Nutrients.KEYS.length; n++) {
+            if (optional[n].getText().toString().isBlank()) j.remove(Nutrients.KEYS[n]);
+            else if (!f.has(Nutrients.KEYS[n])
+                || !optional[n]
+                    .getText()
+                    .toString()
+                    .equals(display(f.optDouble(Nutrients.KEYS[n]) * Nutrients.displayFactor(n))))
+              j.put(Nutrients.KEYS[n], num(optional[n]) / Nutrients.displayFactor(n));
+          }
           j.remove("servingLabel");
           j.remove("servingGrams");
           j.remove("servingMl");
@@ -907,6 +1043,7 @@ public class MainActivity extends ComponentActivity {
   JSONObject editing;
   EditText batchName;
   boolean addingIngredient = false, cooking = false;
+  boolean ingredientCameraDirect = false;
 
   void batchEditor(JSONObject b, boolean duplicate) throws Exception {
     cooking = true;
@@ -956,11 +1093,13 @@ public class MainActivity extends ComponentActivity {
         "Add ingredient",
         () -> {
           remember();
-          ingredientPicker();
+          addingIngredient = true;
+          ingredientCameraDirect = true;
+          scan.launch(new Intent(this, CaptureActivity.class).putExtra("ingredient", true));
         });
     button(
         page,
-        "Save dish",
+        "Done cooking",
         () -> {
           remember();
           JSONObject b =
@@ -1020,7 +1159,13 @@ public class MainActivity extends ComponentActivity {
       ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
           .hideSoftInputFromWindow(focused.getWindowToken(), 0);
     screen("Add ingredient");
-    button(page, "Scan barcode", () -> scan.launch(new Intent(this, CaptureActivity.class)));
+    button(
+        page,
+        "Scan barcode",
+        () -> {
+          ingredientCameraDirect = false;
+          scan.launch(new Intent(this, CaptureActivity.class).putExtra("ingredient", true));
+        });
     button(page, "Enter food manually", () -> foodEditor(obj()));
     button(
         page,
@@ -1059,6 +1204,7 @@ public class MainActivity extends ComponentActivity {
     if (cooking && editing != null && draft != null) {
       if (batchName != null) safe(this::remember);
       state.putBoolean("addingIngredient", addingIngredient);
+      state.putBoolean("ingredientCameraDirect", ingredientCameraDirect);
       state.putString("dishDraft", editing.toString());
       state.putString("ingredientsDraft", draft.toString());
     }
@@ -1097,6 +1243,7 @@ public class MainActivity extends ComponentActivity {
   void portionButton(LinearLayout parent, String title, boolean primary, Action action) {
     Button b = new Button(this);
     b.setText(title);
+    b.setAllCaps(false);
     b.setAllCaps(false);
     b.setTextSize(17);
     b.setTextColor(primary ? 0xff071b11 : 0xffededed);
@@ -1194,7 +1341,7 @@ public class MainActivity extends ComponentActivity {
           amountParams.topMargin = dp(16);
           controls.addView(amount, amountParams);
           SeekBar slider = new SeekBar(this);
-          slider.setMax(units.get(0).equals("serving") ? 79 : 1999);
+          slider.setMax(units.get(0).equals("serving") ? Portion.SERVING_STEPS : 1999);
           slider.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff80d6a2));
           slider.setThumbTintList(android.content.res.ColorStateList.valueOf(0xff80d6a2));
           slider.setContentDescription("Adjust portion quantity");
@@ -1239,6 +1386,7 @@ public class MainActivity extends ComponentActivity {
             facts.addView(line, new LinearLayout.LayoutParams(-1, dp(i == 0 ? 3 : 1)));
             macros[i] = portionRow(facts, names[i], 18, false);
           }
+          TextView fiber = portionRow(facts, "Fiber", 18, false);
           final boolean[] updating = {false};
           final String[] previous = {units.get(0)};
           Runnable update =
@@ -1264,6 +1412,10 @@ public class MainActivity extends ComponentActivity {
                           + " "
                           + (selected.equals("serving") ? "servings" : selected));
                   calories.setText(String.format(Locale.US, "%,.0f", f.getDouble("kcal") * factor));
+                  fiber.setText(
+                      f.has("fiber")
+                          ? String.format(Locale.US, "%.1f g", f.getDouble("fiber") * factor)
+                          : "—");
                   double macroEnergy =
                       f.getDouble("carbs") * 4
                           + f.getDouble("fat") * 9
@@ -1289,7 +1441,11 @@ public class MainActivity extends ComponentActivity {
                   if (!updating[0]) {
                     updating[0] = true;
                     slider.setProgress(
-                        (int) Math.round(selected.equals("serving") ? value * 4 - 1 : value - 1));
+                        (int)
+                            Math.round(
+                                selected.equals("serving")
+                                    ? Portion.servingSliderProgress(value)
+                                    : value - 1));
                     updating[0] = false;
                   }
                 } catch (Exception invalid) {
@@ -1319,7 +1475,7 @@ public class MainActivity extends ComponentActivity {
                     amount.setText(
                         display(
                             units.get(unit.getSelectedItemPosition()).equals("serving")
-                                ? (progress + 1) / 4.0
+                                ? Portion.servingSliderValue(progress)
                                 : progress + 1));
                     updating[0] = false;
                   }
@@ -1332,7 +1488,7 @@ public class MainActivity extends ComponentActivity {
                 public void onItemSelected(
                     android.widget.AdapterView<?> a, android.view.View v, int pos, long id) {
                   String selected = units.get(pos);
-                  slider.setMax(selected.equals("serving") ? 79 : 1999);
+                  slider.setMax(selected.equals("serving") ? Portion.SERVING_STEPS : 1999);
                   try {
                     double converted =
                         Portion.convert(
@@ -1416,23 +1572,329 @@ public class MainActivity extends ComponentActivity {
         });
   }
 
+  final class LogEntry {
+    final JSONObject record;
+    final String kind;
+    final long time;
+    final double fraction;
+    final int portion;
+
+    LogEntry(JSONObject r, String k, long t, double f, int p) {
+      record = r;
+      kind = k;
+      time = t;
+      fraction = f;
+      portion = p;
+    }
+  }
+
   void history() throws Exception {
-    screen("History");
-    button(page, "Dashboard", this::home);
-    for (String kind : new String[] {"batch", "direct"})
-      for (JSONObject b : db.list(kind))
-        button(
-            page,
-            b.getString("name") + " · " + (b.isNull("completed") ? "available" : "completed"),
-            () -> details(b, kind));
-    for (JSONObject entry : db.list("calorie"))
-      button(
-          page,
-          (entry.optString("name").isEmpty() ? "Quick log" : entry.optString("name"))
-              + " · "
-              + display(entry.getDouble("kcal"))
-              + " kcal",
-          () -> calorieEditor(entry));
+    ArrayList<LogEntry> entries = new ArrayList<>();
+    for (JSONObject batch : db.list("batch")) {
+      JSONArray events = batch.optJSONArray("eatingEvents");
+      if (events != null)
+        for (int i = 0; i < events.length(); i++) {
+          JSONObject event = events.getJSONObject(i);
+          entries.add(
+              new LogEntry(batch, "batch", event.getLong("time"), event.getDouble("fraction"), i));
+        }
+      else if (!batch.isNull("completed") && !batch.optBoolean("portionTracking"))
+        entries.add(
+            new LogEntry(
+                batch, "legacy", batch.getLong("completed"), batch.getDouble("share"), -1));
+    }
+    for (JSONObject item : db.list("direct"))
+      entries.add(
+          new LogEntry(item, "direct", item.getLong("completed"), item.getDouble("share"), -1));
+    for (JSONObject item : db.list("calorie"))
+      entries.add(new LogEntry(item, "calorie", item.getLong("time"), 1, -1));
+    entries.sort(
+        (left, right) -> {
+          int c = Long.compare(right.time, left.time);
+          return c != 0 ? c : right.record.optString("id").compareTo(left.record.optString("id"));
+        });
+    LinearLayout root = layout();
+    root.setBackgroundColor(0xff080808);
+    page = root;
+    label(root, "History", 28);
+    ListView list = new ListView(this);
+    list.setDivider(null);
+    list.setCacheColorHint(0xff080808);
+    list.setClipToPadding(false);
+    root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
+    TextView empty = new TextView(this);
+    empty.setText("Your food log will appear here.");
+    empty.setTextColor(0xffaaaab0);
+    root.addView(empty);
+    list.setEmptyView(empty);
+    final int[] visible = {Math.min(25, entries.size())};
+    BaseAdapter adapter =
+        new BaseAdapter() {
+          public int getCount() {
+            return visible[0];
+          }
+
+          public Object getItem(int position) {
+            return entries.get(position);
+          }
+
+          public long getItemId(int position) {
+            return position;
+          }
+
+          public android.view.View getView(
+              int position, android.view.View recycled, android.view.ViewGroup parent) {
+            LogEntry entry = entries.get(position);
+            LinearLayout outer = new LinearLayout(MainActivity.this);
+            outer.setOrientation(LinearLayout.VERTICAL);
+            LocalDate day = Instant.ofEpochMilli(entry.time).atZone(zone).toLocalDate();
+            if (position == 0
+                || !day.equals(
+                    Instant.ofEpochMilli(entries.get(position - 1).time)
+                        .atZone(zone)
+                        .toLocalDate()))
+              label(
+                  outer,
+                  day.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d · yyyy")),
+                  14);
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(5), 0, dp(5));
+            outer.addView(row);
+            TextView clock = new TextView(MainActivity.this);
+            clock.setText(
+                Instant.ofEpochMilli(entry.time)
+                    .atZone(zone)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+            clock.setTextSize(13);
+            clock.setTextColor(0xffaaaab0);
+            row.addView(clock, new LinearLayout.LayoutParams(dp(52), -2));
+            LinearLayout tile = new LinearLayout(MainActivity.this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setPadding(dp(16), dp(12), dp(16), dp(12));
+            android.graphics.drawable.GradientDrawable background =
+                new android.graphics.drawable.GradientDrawable();
+            background.setColor(0xff19191b);
+            background.setCornerRadius(dp(12));
+            tile.setBackground(background);
+            row.addView(tile, new LinearLayout.LayoutParams(0, -2, 1));
+            String name = entry.record.optString("name");
+            label(tile, name.isEmpty() ? "Quick log" : name, 18);
+            safe(
+                () -> {
+                  if (entry.kind.equals("calorie")) {
+                    label(
+                        tile,
+                        display(entry.record.getDouble("kcal")) + " kcal · macros unknown",
+                        13);
+                  } else {
+                    Nutrients.Total n = batchNutrients(entry.record, entry.fraction);
+                    String prefix =
+                        entry.kind.equals("batch")
+                            ? display(entry.fraction * 100) + "% of dish · "
+                            : entry.kind.equals("legacy") ? "Finished · legacy estimate · " : "";
+                    label(tile, prefix + nutrientText(n, 0), 13);
+                    label(
+                        tile,
+                        "Protein " + nutrientText(n, 1) + " · Fiber " + nutrientText(n, 4),
+                        13);
+                  }
+                });
+            return outer;
+          }
+        };
+    list.setAdapter(adapter);
+    final boolean[] loading = {false};
+    list.setOnScrollListener(
+        new AbsListView.OnScrollListener() {
+          public void onScrollStateChanged(AbsListView v, int state) {}
+
+          public void onScroll(AbsListView v, int first, int count, int total) {
+            if (!loading[0]
+                && count > 0
+                && first + count >= total - 4
+                && visible[0] < entries.size()) {
+              loading[0] = true;
+              list.post(
+                  () -> {
+                    visible[0] = Math.min(visible[0] + 25, entries.size());
+                    adapter.notifyDataSetChanged();
+                    loading[0] = false;
+                  });
+            }
+          }
+        });
+    list.setOnItemClickListener(
+        (parent, view, position, id) ->
+            safe(
+                () -> {
+                  LogEntry e = entries.get(position);
+                  if (e.kind.equals("calorie")) calorieEditor(e.record);
+                  else if (e.portion >= 0) editEatingEvent(e.record, e.portion);
+                  else details(e.record, e.kind.equals("legacy") ? "batch" : e.kind);
+                }));
+    present(root, "screen:History");
+  }
+
+  int statsPeriod = 7;
+
+  void stats() throws Exception {
+    screen("Stats");
+    LinearLayout range = new LinearLayout(this);
+    page.addView(range);
+    portionButton(
+        range,
+        "7 days",
+        statsPeriod == 7,
+        () -> {
+          statsPeriod = 7;
+          stats();
+        });
+    portionButton(
+        range,
+        "30 days",
+        statsPeriod == 30,
+        () -> {
+          statsPeriod = 30;
+          stats();
+        });
+    LocalDate today = LocalDate.now(zone),
+        first = today.minusDays(statsPeriod),
+        tracking = LocalDate.parse(settings.getString("start"));
+    if (first.isBefore(tracking)) first = tracking;
+    ArrayList<Nutrients.Total> days = new ArrayList<>();
+    long now = System.currentTimeMillis();
+    for (LocalDate day = first; day.isBefore(today); day = day.plusDays(1))
+      days.add(nutrientTotals(midnight(day), midnight(day.plusDays(1)), now));
+    label(page, days.size() + " completed tracking days · today excluded", 13);
+    button(page, "Set daily goals", this::chooseNutrientGoal);
+    if (days.isEmpty()) {
+      label(page, "Daily averages start after your first full tracking day.", 16);
+      return;
+    }
+    label(page, "Daily averages", 22);
+    for (int i = 0; i < Nutrients.KEYS.length; i++) {
+      Nutrients.Days tally = new Nutrients.Days();
+      double target = goal(i);
+      for (Nutrients.Total day : days)
+        tally.add(day.values[i], day.missing[i], target, Nutrients.KEYS[i].equals("sodium"));
+      LinearLayout box = card(page);
+      label(box, Nutrients.NAMES[i], 19);
+      String avg =
+          Double.isNaN(tally.average())
+              ? "—"
+              : display(tally.average() * Nutrients.displayFactor(i)) + " " + Nutrients.unit(i);
+      metricRow(box, "Daily average", avg);
+      if (i > 0) {
+        if (target > 0)
+          label(
+              box,
+              tally.met
+                  + " / "
+                  + days.size()
+                  + (Nutrients.KEYS[i].equals("sodium") ? " days within " : " days met ")
+                  + display(target * Nutrients.displayFactor(i))
+                  + " "
+                  + Nutrients.unit(i)
+                  + (Nutrients.KEYS[i].equals("sodium") ? " limit" : " goal"),
+              13);
+        else label(box, "No daily goal set", 13);
+      }
+      if (tally.unknown > 0)
+        label(
+            box,
+            tally.unknown
+                + " days have missing data · average uses "
+                + tally.complete
+                + " complete days",
+            12);
+    }
+    button(
+        page,
+        "About these stats",
+        () ->
+            new AlertDialog.Builder(this)
+                .setMessage(
+                    "Averages use completed tracking days and recorded food only. Days with missing"
+                        + " nutrient values are excluded from that nutrient's average and goal"
+                        + " count. Goals are your current editable targets, not a personalized RDA."
+                        + " Unlogged food is not included.")
+                .setPositiveButton("OK", null)
+                .show());
+  }
+
+  void chooseNutrientGoal() {
+    String[] names = new String[Nutrients.KEYS.length - 1];
+    for (int i = 1; i < Nutrients.KEYS.length; i++)
+      names[i - 1] = Nutrients.NAMES[i] + " (" + Nutrients.unit(i) + ")";
+    new AlertDialog.Builder(this)
+        .setTitle("Daily nutrient goals")
+        .setItems(
+            names,
+            (d, which) ->
+                safe(
+                    () -> {
+                      int i = which + 1;
+                      LinearLayout form = layout();
+                      EditText input =
+                          field(
+                              form,
+                              (Nutrients.KEYS[i].equals("sodium")
+                                      ? "Daily limit ("
+                                      : "Daily minimum (")
+                                  + Nutrients.unit(i)
+                                  + ")",
+                              goal(i) > 0 ? display(goal(i) * Nutrients.displayFactor(i)) : "");
+                      input.setInputType(
+                          InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+                      AlertDialog dialog =
+                          new AlertDialog.Builder(this)
+                              .setTitle(Nutrients.NAMES[i])
+                              .setView(form)
+                              .setPositiveButton("Save", null)
+                              .setNeutralButton("Clear", null)
+                              .setNegativeButton("Cancel", null)
+                              .create();
+                      dialog.setOnShowListener(
+                          ignored -> {
+                            dialog
+                                .getButton(-1)
+                                .setOnClickListener(
+                                    v ->
+                                        safe(
+                                            () -> {
+                                              JSONObject copy = new JSONObject(settings.toString()),
+                                                  goals = copy.optJSONObject("nutrientGoals");
+                                              if (goals == null) goals = obj();
+                                              double value =
+                                                  num(input) / Nutrients.displayFactor(i);
+                                              if (value <= 0)
+                                                throw new Exception("Enter a positive goal");
+                                              goals.put(Nutrients.KEYS[i], value);
+                                              copy.put("nutrientGoals", goals);
+                                              db.save("settings", copy);
+                                              settings = copy;
+                                              dialog.dismiss();
+                                              stats();
+                                            }));
+                            dialog
+                                .getButton(-3)
+                                .setOnClickListener(
+                                    v ->
+                                        safe(
+                                            () -> {
+                                              JSONObject copy = new JSONObject(settings.toString()),
+                                                  goals = copy.optJSONObject("nutrientGoals");
+                                              if (goals != null) goals.remove(Nutrients.KEYS[i]);
+                                              db.save("settings", copy);
+                                              settings = copy;
+                                              dialog.dismiss();
+                                              stats();
+                                            }));
+                          });
+                      dialog.show();
+                    }))
+        .show();
   }
 
   void details(JSONObject b, String kind) throws Exception {
