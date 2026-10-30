@@ -3,6 +3,7 @@ package dev.rohit.labelaudit;
 import android.app.*;
 import android.content.*;
 import android.os.Bundle;
+import android.text.InputType;
 import android.widget.*;
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.*;
@@ -51,6 +52,7 @@ public class MainActivity extends ComponentActivity {
           r -> {
             if (r.getResultCode() == RESULT_OK && r.getData() != null)
               lookup(r.getData().getStringExtra("raw_code"));
+            else if (this.addingIngredient) safe(this::batchForm);
           });
   ActivityResultLauncher<String> export =
       registerForActivityResult(
@@ -125,7 +127,13 @@ public class MainActivity extends ComponentActivity {
             db.save("rate", rate);
           }
           settings = db.list("settings").get(0);
-          home();
+          if (b != null && b.containsKey("dishDraft")) {
+            editing = new JSONObject(b.getString("dishDraft"));
+            draft = new JSONArray(b.getString("ingredientsDraft"));
+            cooking = true;
+            addingIngredient = b.getBoolean("addingIngredient");
+            batchForm();
+          } else home();
         });
   }
 
@@ -292,6 +300,8 @@ public class MainActivity extends ComponentActivity {
   }
 
   void home() throws Exception {
+    cooking = false;
+    addingIngredient = false;
     screen("Today");
     long now = System.currentTimeMillis();
     LocalDate today = LocalDate.now(zone);
@@ -618,22 +628,32 @@ public class MainActivity extends ComponentActivity {
               f.has(keys[i]) ? f.optString(keys[i]) : i == 1 ? "100" : i == 2 ? "g" : "");
     button(
         page,
-        "Save food",
+        addingIngredient ? "Save & add to dish" : "Save food",
         () -> {
           JSONObject j = new JSONObject(f.toString());
           for (int i = 0; i < 7; i++)
             j.put(keys[i], i == 0 || i == 2 ? e[i].getText().toString().trim() : num(e[i]));
           db.save("food", j);
-          foods();
+          if (addingIngredient) ingredientQuantity(j);
+          else foods();
         });
-    button(page, "Cancel", this::foods);
+    button(
+        page,
+        "Cancel",
+        () -> {
+          if (addingIngredient) batchForm();
+          else foods();
+        });
   }
 
   JSONArray draft;
   JSONObject editing;
-  EditText batchName, available;
+  EditText batchName;
+  boolean addingIngredient = false, cooking = false;
 
   void batchEditor(JSONObject b, boolean duplicate) throws Exception {
+    cooking = true;
+    addingIngredient = false;
     editing = b == null ? obj() : new JSONObject(b.toString());
     if (duplicate) {
       editing.remove("id");
@@ -651,12 +671,6 @@ public class MainActivity extends ComponentActivity {
   void batchForm() throws Exception {
     screen("Create / edit dish");
     batchName = field(page, "Dish name", editing.optString("name"));
-    available =
-        field(
-            page,
-            "Available from · " + zone,
-            time(editing.optLong("available", System.currentTimeMillis())));
-    label(page, "No cooked weight or portions needed. Ingredient nutrition is snapshotted.", 14);
     for (int i = 0; i < draft.length(); i++) {
       final int index = i;
       JSONObject x = draft.getJSONObject(i);
@@ -682,28 +696,7 @@ public class MainActivity extends ComponentActivity {
         "Add ingredient",
         () -> {
           remember();
-          List<JSONObject> fs = db.list("food");
-          if (fs.isEmpty()) {
-            toast("Save a food first using Foods");
-            return;
-          }
-          String[] names = new String[fs.size()];
-          for (int i = 0; i < names.length; i++) names[i] = fs.get(i).optString("name");
-          new AlertDialog.Builder(this)
-              .setTitle("Choose saved food")
-              .setItems(
-                  names,
-                  (d, w) ->
-                      quantity(
-                          fs.get(w),
-                          q -> {
-                            draft.put(
-                                obj()
-                                    .put("food", new JSONObject(fs.get(w).toString()))
-                                    .put("quantity", q));
-                            batchForm();
-                          }))
-              .show();
+          ingredientPicker();
         });
     button(
         page,
@@ -714,17 +707,101 @@ public class MainActivity extends ComponentActivity {
               new JSONObject(editing.toString())
                   .put("ingredients", draft)
                   .put("share", editing.optDouble("share", 1));
+          if (!b.has("available")) b.put("available", System.currentTimeMillis());
           if (!b.has("completed")) b.put("completed", JSONObject.NULL);
           db.save("batch", b);
           home();
+        });
+    button(
+        page,
+        "Change start time (optional)",
+        () -> {
+          remember();
+          ZonedDateTime selected =
+              Instant.ofEpochMilli(editing.optLong("available", System.currentTimeMillis()))
+                  .atZone(zone);
+          new DatePickerDialog(
+                  this,
+                  (picker, year, month, day) -> {
+                    new TimePickerDialog(
+                            this,
+                            (clock, hour, minute) ->
+                                safe(
+                                    () -> {
+                                      editing.put(
+                                          "available",
+                                          LocalDateTime.of(year, month + 1, day, hour, minute)
+                                              .atZone(zone)
+                                              .toInstant()
+                                              .toEpochMilli());
+                                      batchForm();
+                                    }),
+                            selected.getHour(),
+                            selected.getMinute(),
+                            true)
+                        .show();
+                  },
+                  selected.getYear(),
+                  selected.getMonthValue() - 1,
+                  selected.getDayOfMonth())
+              .show();
         });
     button(page, "Cancel", this::home);
   }
 
   void remember() throws Exception {
-    editing
-        .put("name", batchName.getText().toString().trim())
-        .put("available", timestamp(available));
+    editing.put("name", batchName.getText().toString().trim());
+  }
+
+  void ingredientPicker() throws Exception {
+    addingIngredient = true;
+    android.view.View focused = getCurrentFocus();
+    if (focused != null)
+      ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+          .hideSoftInputFromWindow(focused.getWindowToken(), 0);
+    screen("Add ingredient");
+    button(page, "Scan barcode", () -> scan.launch(new Intent(this, CaptureActivity.class)));
+    button(page, "Enter food manually", () -> foodEditor(obj()));
+    button(
+        page,
+        "Enter barcode",
+        () -> {
+          LinearLayout l = layout();
+          EditText code = field(l, "Barcode", "");
+          new AlertDialog.Builder(this)
+              .setTitle("Look up food")
+              .setView(l)
+              .setPositiveButton("Look up", (d, w) -> lookup(code.getText().toString()))
+              .setNegativeButton("Cancel", null)
+              .show();
+        });
+    List<JSONObject> saved = db.list("food");
+    if (!saved.isEmpty()) label(page, "Saved foods", 20);
+    for (JSONObject food : saved)
+      button(page, food.getString("name"), () -> ingredientQuantity(food));
+    button(page, "Back to dish", this::batchForm);
+  }
+
+  void ingredientQuantity(JSONObject food) throws Exception {
+    batchForm();
+    quantity(
+        food,
+        q -> {
+          draft.put(obj().put("food", new JSONObject(food.toString())).put("quantity", q));
+          addingIngredient = false;
+          batchForm();
+        });
+  }
+
+  @Override
+  public void onSaveInstanceState(Bundle state) {
+    super.onSaveInstanceState(state);
+    if (cooking && editing != null && draft != null) {
+      if (batchName != null) safe(this::remember);
+      state.putBoolean("addingIngredient", addingIngredient);
+      state.putString("dishDraft", editing.toString());
+      state.putString("ingredientsDraft", draft.toString());
+    }
   }
 
   interface Quantity {
@@ -734,6 +811,7 @@ public class MainActivity extends ComponentActivity {
   void quantity(JSONObject f, Quantity callback) {
     LinearLayout l = layout();
     EditText q = field(l, "Quantity in " + f.optString("unit"), "");
+    q.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
     AlertDialog dialog =
         new AlertDialog.Builder(this)
             .setTitle(f.optString("name"))

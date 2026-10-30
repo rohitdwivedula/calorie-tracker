@@ -1,4 +1,4 @@
-Batch Nutrition V1 dashboard update (1.0.1, versionCode 3)
+Batch Nutrition V1 dashboard update (1.0.2, versionCode 4)
 
 Validation performed in this workspace:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
@@ -12,8 +12,8 @@ Validation performed in this workspace:
 - No Android device connected (adb devices empty).
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8108439
-SHA256: 0da43917821677d7e87c6e941b7c58c701918834e5a37275179dd5cfb1b7e270
+Bytes: 8111311
+SHA256: 42b9509a2f2ea3e2f0252ae6bc76232ca1d8eb8ca21364358ecc40a9506b2645
 
 Not verified on a device: camera and permission flows, Android SQLite lifecycle,
 backup picker/restore, keyboard/accessibility, process recreation, screen layout,
@@ -32,3 +32,8 @@ Recommended phone acceptance checks:
 
 Dashboard update: three compact estimate tiles; Sunday-to-now home weekly balance.
 Detailed accounting moved to More → Nutrition details. No stored facts changed.
+
+Cooking-flow update: inline ingredient scan/manual/saved selection; automatic
+availability on save; optional native date/time picker; draft state retained across
+activity recreation; decimal keyboard for ingredient quantities. Build, tests, lint,
+APK signature and alignment checks repeated successfully. Phone UI testing pending.

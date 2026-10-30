@@ -18,7 +18,11 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
 - Foods may use grams, milliliters, or servings. Enter quantities in the food's exact
   basis unit. There is no implicit ml-to-gram or serving-to-gram conversion. To use
   another basis, create a food with the label's valid nutrition for that basis.
-- Create a dish from saved foods. Each ingredient retains a complete nutrition snapshot.
+- Create a dish and tap Add ingredient: scan a barcode, enter a food manually, or choose
+  a saved food. Save the food and enter its quantity to return to your dish. The dish
+  name and ingredients are retained while scanning/adding foods. Availability defaults
+  to the time you save; Change start time is an optional date/time picker.
+  Each ingredient retains a complete nutrition snapshot.
   Edit ingredient quantities by removing and adding the ingredient again.
 - **Finished** is one tap and uses your existing share (initially 100%). Details allow
   changing share, correcting timestamps, undoing completion, editing, duplicating,
