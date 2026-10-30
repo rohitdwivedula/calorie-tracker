@@ -1,60 +1,106 @@
-# Label Audit — Android field-test app
+# Batch Nutrition — Android V1
 
-An intentionally small Android app for testing product lookup and raw nutrition-label OCR. No nutrient parsing, calorie diary, account, or API key is required.
+Local-first batch nutrition tracking for a personal ARM64 Android phone (Android 8+).
+Create foods, add ingredient quantities to a named dish, then tap **Finished** when
+it is gone. No cooked weight, meal categories, portions, account, OCR, or backend.
 
-## Install and test
+## Daily use
 
-1. Install `LabelAudit.apk` on an ARM64 Android phone (Android 8+). Android may ask you to allow installation from the app used to open the APK. This is a debug-signed test build, not a Play Store release.
-2. Open **Label Audit**, and grant camera permission.
-3. Optionally enter a sample name such as `tomatoes`. Keep that name for the matching barcode and label photo.
-4. Tap **Scan barcode / QR code**. Aim at a UPC/EAN grocery barcode. It captures automatically, saves an original barcode photo, and queries Open Food Facts. Numeric QR codes, Open Food Facts product links, and GS1 Digital Links are supported. Arbitrary QR links are saved as unsupported; the app does not visit them.
-5. Tap **Photograph nutrition label**. Tap the preview to focus, then **Take label photo**. OCR runs on-device and saves its raw output in SQLite. The original camera JPEG is retained unchanged. Here “original” means the camera's JPEG, not sensor RAW/DNG.
-6. Repeat for 5–10 products. Tap any saved record to review its result and open its photo.
-7. Tap **Export logs (.tar.gz)** and choose a location in Android's file picker. Alternatively use **Share last export** after making the export. Attach the archive to the conversation for an audit.
+- Dashboard shows estimated cumulative deficit (positive = expenditure minus intake),
+  selected-week intake/macros, accrued estimated expenditure, and a separate full-week target.
+- Set your own expenditure in **Settings & backup**. Initial assumption is explicitly
+  2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
+- **Scan food** or enter a barcode in **Foods**. Lookup uses Open Food Facts. Review
+  the product's nutrition basis and save; incomplete nutrition requires manual entry.
+  Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
+- Foods may use grams, milliliters, or servings. Enter quantities in the food's exact
+  basis unit. There is no implicit ml-to-gram or serving-to-gram conversion. To use
+  another basis, create a food with the label's valid nutrition for that basis.
+- Create a dish from saved foods. Each ingredient retains a complete nutrition snapshot.
+  Edit ingredient quantities by removing and adding the ingredient again.
+- **Finished** is one tap and uses your existing share (initially 100%). Details allow
+  changing share, correcting timestamps, undoing completion, editing, duplicating,
+  and confirmed deletion. Duplicate batches have independent IDs/snapshots and 100% share.
+- For a packaged/simple food, choose **Log food now** in Foods and enter its quantity.
+- Completed records remain in History. Saved foods and all accounting work offline.
 
-The archive is a snapshot: export again after capturing more samples. Export never clears records. Do not uninstall or clear app storage before exporting; doing so removes the local database and photos. Cloud backup is disabled.
+## Accounting model
 
-## Data collected
+SQLite `nutrition.db` schema version 2 stores authoritative JSON documents in a
+structured records table with stable IDs and explicit kinds: food, batch, direct,
+settings and effective-dated expenditure rate. SQLiteOpenHelper migrates version 1 to 2 by adding a kind index without changing facts;
+unsupported future migrations fail rather than discarding data. The prototype's
+separate `audit.db` is not imported or changed. No audit logs or images are collected.
 
-- Barcode: raw decoded string, ML Kit format, sample name, timestamp, optional original capture, extracted product code, exact request URL/method, HTTP status/headers, complete decoded UTF-8 response body, elapsed time, and failures.
-- OCR: original JPEG, sample name, raw text, text blocks, lines, elements, bounding boxes, corner points, available line/element confidence and angle, recognized language, input dimensions/rotation, timing, and failures. No nutrition fields are inferred.
-- Export manifest: app version, Android version, device model, counts, sizes and SHA-256 checksums. No advertising ID, location, account information, or gallery access is collected by app code. Bundled Google SDKs remain governed by Google's SDK terms.
-- Data is stored in app-private SQLite (`audit.db`) and files. Photos are never uploaded by this app. Product codes go to `world.openfoodfacts.org`; sharing exports is explicitly user initiated.
+Batch facts: ingredient quantities and nutrition snapshots, actual availability,
+nullable actual completion, and consumed share. Direct food records are instantaneous.
+Policy settings are distinct from these facts: expected duration and `linear-v1` ID.
+`Estimator` is a pure replaceable calculation. No inferred consumption, meals,
+allocations, or aggregate caches are stored.
 
-## Archive layout
+Completed batches allocate total × share evenly across their actual interval;
+zero-duration intervals allocate once at completion. Unfinished batches allocate
+linearly across the expected duration (48 hours initially), clipped at the queried
+as-of time and capped at total × share. They remain provisional indefinitely until
+explicitly finished. Completion replaces the provisional calculation, so previous
+weeks may reconcile. Intervals and calendar views are half-open; timestamps are epoch
+milliseconds interpreted using the device's local timezone. Local calendar boundaries
+include DST. Changing device timezone changes calendar views, not recorded instants.
 
-```text
-manifest.json                 schema, device, counts and file hashes
-logs.jsonl                    one complete record per line
-records/<uuid>.json           same records, pretty-printed
-responses/<uuid>.json         exact API response text (can be non-JSON on HTTP errors)
-ocr/<uuid>.txt                 raw recognized text
-photos/<uuid>.jpg             original captures, referenced by record.photo
-README.txt                    format notes
-```
+Daily expenditure accrues by elapsed fraction of the local calendar day, including
+23/25-hour days. Effective-date rates preserve earlier assumptions. Nothing accrues
+before tracking start. Full-week target sums effective daily rates for seven days
+minus the weekly goal; with a constant rate this is `7 × rate − goal`. Future rate
+assumptions carry forward until another effective date. Current-week balance is only
+week-to-date, never an achieved full-week goal.
 
-A record's `sample` associates separately captured barcode and label events. Each scan remains distinct even if the same product is scanned again. Photos left by interrupted captures are also exported so no original is silently lost. If a referenced photo is missing, export fails rather than silently producing an incomplete archive. Interrupted pending records are marked on next process start. The database itself is not included; `logs.jsonl` provides a portable snapshot of every stored record.
+## Backup and privacy
 
-## Implementation
+**Settings & backup → Export** writes a portable UTF-8 JSON file with schema version
+and authoritative records/settings using Android's document picker. **Restore** validates
+types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
+replacement. It replaces ALL tracker data after confirmation; it does not merge.
+Repeated restoration cannot duplicate records. Export first to preserve current data.
+Keep backups private: they contain food history and settings. No signing keys or
+personal backups belong in Git.
 
-Java 17; native Android views; CameraX 1.4.1; bundled ML Kit barcode scanning 17.3.0 and Latin text recognition 16.0.1; SQLiteOpenHelper; HttpURLConnection; streaming USTAR + gzip. No web backend or FatSecret credentials. Target SDK 34, compile SDK 35, minimum SDK 26. ARM64 build intended for the Pixel 10. GPS capture is not requested.
+No analytics, photos, remote uploads or accounts. Only explicitly requested barcode
+lookups contact `world.openfoodfacts.org`. Open Food Facts community data is licensed
+under ODbL; see https://world.openfoodfacts.org/data. Missing values never become zero.
 
-Open Food Facts product endpoint: `/api/v2/product/{code}.json`. Complete responses are retained so the audit can inspect fields not yet surfaced in the UI. Product data is community maintained; missing data is never treated as zero. Attribution: [Open Food Facts](https://world.openfoodfacts.org/data), ODbL. This is an audit prototype; review the provider's current requirements before wider distribution.
+## Build here
 
-## Build
-
-Install JDK 17, Android SDK platform 35 and build-tools 35.0.0. Set `ANDROID_HOME` or create your own untracked `local.properties` with `sdk.dir=...`.
+The ignored `.android-toolchain/` contains Temurin JDK 17, Android SDK platform 35,
+build tools 35.0.0, command-line tools and Gradle's cache. Run:
 
 ```sh
-./gradlew :app:assembleDebug :app:testDebugUnitTest
+./scripts/build-android.sh
+# Other tasks:
+./scripts/build-android.sh :app:lintDebug
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
+APK: `app/build/outputs/apk/debug/app-debug.apk`. Debug signing is generated locally;
+no keys are committed. Java 17, Gradle 8.9, AGP 8.7.3, native Android views, CameraX,
+bundled ML Kit barcode scanner. No OCR dependency.
 
-## Test signing
+For another Linux x86_64 machine, install a JDK 17 at `.android-toolchain/jdk` and
+Google Android command-line tools at `.android-toolchain/sdk/cmdline-tools/latest`:
 
-Signing keys are excluded from Git. Debug builds use the Android Gradle plugin’s local debug keystore. To update an installed test APK without uninstalling and losing captures, the build must use the same signing key as that APK. No FatSecret client credentials are included.
+```sh
+source scripts/android-env.sh
+sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+sdkmanager --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+./scripts/build-android.sh
+```
 
-## Verification limits
+Alternatively set Java/SDK paths normally and run `./gradlew :app:assembleDebug :app:testDebugUnitTest`.
+Network access is required for initial dependency downloads. Android Studio is optional.
 
-The supplied build report describes compilation and automated checks. Camera quality, on-device ML Kit performance, and Android save/share behavior must still be exercised on the physical Pixel; no claim of physical-device testing is made. This prototype retains raw outputs for that purpose.
+## Validation limits
+
+Automated tests cover barcode extraction, allocation clipping/reconciliation, weekly
+boundary partitioning, instantaneous records, invalid intervals, DST, expenditure
+start dates and effective-date changes. Build/lint results are recorded in
+`BUILD_REPORT.txt`. Camera behavior, SQLite/backup document-picker flows and usability
+still need physical-device testing; this environment has no connected Android device.

@@ -3,9 +3,15 @@
 local.properties
 *.jks
 *.keystore
-
-.codex-attachments/
 *.p12
 *.pfx
 *.pem
 *.key
+.android-toolchain/
+.codex-attachments/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*backup*.json
+exports/

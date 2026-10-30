@@ -1,12 +1,31 @@
-Label Audit 0.1.0 build verification
+Batch Nutrition V1 (1.0.0, versionCode 2)
 
-- Clean Android debug APK build succeeded with JDK 17 / Gradle 8.9 / AGP 8.7.3.
-- All 8 JUnit tests passed (barcode extraction and streaming TAR correctness).
-- Independent Python tarfile reader opened a Java-written .tar.gz fixture; original user JPEG was preserved byte-for-byte and Unicode OCR text survived.
-- APK signature verified with apksigner.
-- APK zip alignment verified. All four ARM64 native libraries have 16 KB ELF LOAD alignment.
-- Manifest verified: launchable MainActivity, min SDK 26, target SDK 34, ARM64.
-- No physical-device, camera, OCR-accuracy, SQLite instrumentation or Android share-picker testing performed in this environment.
-- Open Food Facts endpoint was tested separately with the user's tomato barcode earlier in this conversation.
+Validation performed in this workspace:
+- JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
+- :app:assembleDebug, :app:testDebugUnitTest, :app:lintDebug passed.
+- 17 JUnit tests passed: 6 barcode, 7 allocation, 4 expenditure.
+- Lint: zero errors; warnings include retained dependency/target versions,
+  ARM64-only ChromeOS compatibility, backup configuration and untranslated strings.
+- APK signature verified (v2); zipalign -c -P 16 4 passed.
+- Schema v1 to v2 index migration SQL exercised with SQLite: existing row preserved.
+- git diff --check passed.
+- No Android device connected (adb devices empty).
 
-APK SHA-256: cb1bde3db8a1f0b3fb91c912f3117db1306401ed587c50a8edb413280c055bcd
+APK: app/build/outputs/apk/debug/app-debug.apk
+Bytes: 8138403
+SHA256: 8e3ccfbabd2c172734bdb5f710c87edf91d48e95861bd689d238f6ceb7ee38e6
+
+Not verified on a device: camera and permission flows, Android SQLite lifecycle,
+backup picker/restore, keyboard/accessibility, process recreation, screen layout,
+and real-world Open Food Facts lookup. No claim of device testing is made.
+
+Recommended phone acceptance checks:
+1. Set expenditure, tracking start and week start; confirm initial balance.
+2. Scan a product; reject/deny camera permission and try manual lookup as well.
+3. Create/correct foods with missing nutrition; verify grams vs servings vs ml.
+4. Create a dish, reopen app, finish, adjust share, undo completion, duplicate.
+5. Correct availability/completion across week boundaries; verify reconciliation.
+6. Log a simple food directly; check history correction and confirmed deletion.
+7. Export, modify data, restore; repeat restore and verify no duplicate records.
+8. Try malformed backup; verify original history is retained.
+9. Enable airplane mode; verify foods, batches, completion and dashboard work.

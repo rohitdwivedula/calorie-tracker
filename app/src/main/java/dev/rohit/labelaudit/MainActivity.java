@@ -1,71 +1,838 @@
 package dev.rohit.labelaudit;
-import android.app.AlertDialog;
+
+import android.app.*;
 import android.content.*;
-import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
-import android.view.*;
 import android.widget.*;
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.*;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.core.content.FileProvider;
-import org.json.*;
 import java.io.*;
+import java.net.*;
+import java.time.*;
 import java.util.*;
+import org.json.*;
+
 public class MainActivity extends ComponentActivity {
- private AuditApp app;private LinearLayout history;private TextView status;private EditText sample;private final List<Button> actions=new ArrayList<>();private String pendingExport;private String captureSample="";
- private final ActivityResultLauncher<Intent> camera=registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),result->{
-  if(result.getResultCode()!=RESULT_OK || result.getData()==null)return;Intent d=result.getData();String mode=d.getStringExtra("mode");
-  JSONObject j=app.begin(mode,d.getStringExtra("photo"),d.getStringExtra("raw_code"),d.getIntExtra("format",0),captureSample);
-  if(d.hasExtra("capture_error")){AuditApp.put(j,"capture_error",d.getStringExtra("capture_error"));app.store.save(j);}
-  busy(true,"barcode".equals(mode)?"Looking up Open Food Facts…":"Reading the label on your phone…");
-  app.worker.execute(()->{if("barcode".equals(mode))app.lookup(j);else app.ocr(j);runOnUiThread(()->{if(isDestroyed())return;busy(false,"Saved locally · "+j.optString("status"));refresh();show(j);});});
- });
- private final ActivityResultLauncher<String> save=registerForActivityResult(new ActivityResultContracts.CreateDocument("application/gzip"),uri->{
-  if(uri==null){busy(false,"Export kept locally. Tap Share last export to send it.");return;}if(pendingExport==null)return;String path=pendingExport;busy(true,"Saving archive…");
-  app.worker.execute(()->{try(InputStream in=new FileInputStream(path);OutputStream out=getContentResolver().openOutputStream(uri)){if(out==null)throw new IOException("Unable to open destination");byte[] b=new byte[32768];int n;while((n=in.read(b))!=-1)out.write(b,0,n);runOnUiThread(()->busy(false,"Archive saved. You can attach it to this chat."));}catch(Exception e){runOnUiThread(()->busy(false,"Save failed: "+e.getMessage()+". Use Share last export to retry."));}});
- });
- @Override public void onCreate(Bundle state){super.onCreate(state);app=(AuditApp)getApplication();
-  pendingExport=getPreferences(0).getString("last_export",null);if(state!=null){captureSample=state.getString("capture_sample","");pendingExport=state.getString("pending_export",pendingExport);}
-  ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(22),dp(24),dp(22),dp(24));root.setBackgroundColor(0xfff4f5ef);scroll.addView(root);
-  TextView badge=text("FIELD TEST · 01",12);badge.setTextColor(0xff196b52);root.addView(badge);
-  TextView title=text("Label Audit",32);title.setTypeface(null,1);root.addView(title);
-  root.addView(text("Scan. Capture. Compare.",18));
-  TextView intro=text("Collect real packaging data for your nutrition app. Photos and OCR stay on this phone. Barcode numbers are sent to Open Food Facts.",15);intro.setPadding(0,dp(12),0,dp(16));root.addView(intro);
-  sample=new EditText(this);sample.setSingleLine(true);sample.setHint("Optional sample name · e.g. tomatoes");sample.setId(9001);root.addView(sample);
-  if(state!=null)sample.setText(state.getString("sample",""));
-  button(root,"Scan barcode / QR code",()->launch("barcode"));
-  button(root,"Photograph nutrition label",()->launch("ocr"));
-  button(root,"Enter barcode manually",this::manual);
-  root.addView(text("Use the same sample name for a barcode and its label photo so they are easy to compare.",13));
-  status=text("Ready · bundled on-device ML Kit",14);status.setPadding(0,dp(16),0,dp(12));root.addView(status);
-  button(root,"Export logs (.tar.gz)",this::export);
-  button(root,"Share last export",this::share);
-  TextView recent=text("Saved captures",23);recent.setPadding(0,dp(22),0,dp(8));root.addView(recent);
-  history=new LinearLayout(this);history.setOrientation(LinearLayout.VERTICAL);root.addView(history);
-  TextView credit=text("Food data: Open Food Facts · ODbL\nRaw OCR only — no nutrition parsing.\nVersion 0.1.0 · Photos remain until app data is cleared or the app is uninstalled.",12);credit.setPadding(0,dp(20),0,dp(12));root.addView(credit);setContentView(scroll);refresh();
- }
- @Override protected void onResume(){super.onResume();if(app!=null && history!=null)refresh();}
- @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);b.putString("capture_sample",captureSample);b.putString("pending_export",pendingExport);b.putString("sample",sample.getText().toString());}
- private void launch(String mode){captureSample=sample.getText().toString().trim();camera.launch(new Intent(this,CaptureActivity.class).putExtra("mode",mode));}
- private void manual(){EditText input=new EditText(this);input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);new AlertDialog.Builder(this).setTitle("Product barcode number").setView(input).setNegativeButton("Cancel",null).setPositiveButton("Look up",(d,w)->{
-  JSONObject j=app.begin("barcode",null,input.getText().toString().trim(),0,sample.getText().toString().trim());AuditApp.put(j,"source","manual");app.store.save(j);busy(true,"Looking up Open Food Facts…");app.worker.execute(()->{app.lookup(j);runOnUiThread(()->{if(isDestroyed())return;busy(false,"Saved locally · "+j.optString("status"));refresh();show(j);});});}).show();}
- private void export(){busy(true,"Packing all records and original photos…");app.worker.execute(()->{try{File f=app.export();runOnUiThread(()->{pendingExport=f.getAbsolutePath();getPreferences(0).edit().putString("last_export",pendingExport).apply();if(isDestroyed())return;busy(false,"Export ready · "+(f.length()/1024)+" KB");save.launch(f.getName());});}catch(Exception e){runOnUiThread(()->busy(false,"Export failed: "+e.getMessage()));}});}
- private void share(){if(pendingExport==null || !new File(pendingExport).isFile()){Toast.makeText(this,"Export logs first.",Toast.LENGTH_SHORT).show();return;}
-  Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",new File(pendingExport));Intent i=new Intent(Intent.ACTION_SEND).setType("application/gzip").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);i.setClipData(ClipData.newRawUri("Label Audit export",uri));startActivity(Intent.createChooser(i,"Send audit archive"));}
- private void refresh(){history.removeAllViews();List<JSONObject> records=app.store.all();if(records.isEmpty()){history.addView(text("No captures yet. Start with a product barcode, then photograph its nutrition label.",15));return;}
-  for(JSONObject j:records){Button b=new Button(this);b.setAllCaps(false);b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);String name=j.optString("sample");if(name.isEmpty())name=j.optString("product_name",j.optString("raw_code","Nutrition label"));b.setText(name+"\n"+j.optString("kind")+" · "+j.optString("status")+" · "+j.optString("created_at"));b.setTextSize(14);b.setOnClickListener(v->show(j));history.addView(b,new LinearLayout.LayoutParams(-1,-2));}
- }
- private void show(JSONObject j){String body;
-  if("ocr".equals(j.optString("kind")))body=j.optString("text",j.optString("error","No text returned."));
-  else {body="Code: "+j.optString("raw_code")+"\nStatus: "+j.optString("status")+"\n"+j.optString("error","");try{JSONObject response=new JSONObject(j.optString("response_body","{}"));JSONObject p=response.optJSONObject("product");if(p!=null)body+="\n\n"+p.optString("product_name")+"\n"+p.optString("brands")+"\nServing: "+p.optString("serving_size","not listed")+"\n\nRaw nutriments:\n"+(p.optJSONObject("nutriments")==null?"Not supplied":p.getJSONObject("nutriments").toString(2));}catch(Exception ignored){}}
-  TextView t=text(body,15);t.setTextIsSelectable(true);t.setPadding(dp(18),dp(12),dp(18),dp(12));ScrollView s=new ScrollView(this);s.addView(t);
-  AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("ocr".equals(j.optString("kind"))?"Raw ML Kit OCR":"Open Food Facts result").setView(s).setPositiveButton("Done",null);
-  if(!j.isNull("photo"))dialog.setNeutralButton("View photo",(d,w)->{File f=new File(getFilesDir(),j.optString("photo"));Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);try{startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));}catch(ActivityNotFoundException e){Toast.makeText(this,"No photo viewer installed. The image is included in exports.",Toast.LENGTH_LONG).show();}});dialog.show();
- }
- private void busy(boolean value,String message){if(isDestroyed())return;for(Button b:actions)b.setEnabled(!value);status.setText(message);}
- private TextView text(String s,int size){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(0xff203b31);return t;}
- private void button(LinearLayout root,String s,Runnable action){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(16);b.setPadding(dp(8),dp(12),dp(8),dp(12));b.setOnClickListener(v->action.run());root.addView(b,new LinearLayout.LayoutParams(-1,-2));actions.add(b);}
- private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density);}
+  Data db;
+  LinearLayout page;
+  JSONObject settings;
+  int weekOffset = 0;
+  final ZoneId zone = ZoneId.systemDefault();
+
+  interface Action {
+    void run() throws Exception;
+  }
+
+  void safe(Action a) {
+    try {
+      a.run();
+    } catch (Exception e) {
+      new AlertDialog.Builder(this).setMessage(e.getMessage()).setPositiveButton("OK", null).show();
+    }
+  }
+
+  JSONObject obj() {
+    return new JSONObject();
+  }
+
+  JSONObject put(JSONObject j, String k, Object v) {
+    try {
+      j.put(k, v);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return j;
+  }
+
+  ActivityResultLauncher<Intent> scan =
+      registerForActivityResult(
+          new ActivityResultContracts.StartActivityForResult(),
+          r -> {
+            if (r.getResultCode() == RESULT_OK && r.getData() != null)
+              lookup(r.getData().getStringExtra("raw_code"));
+          });
+  ActivityResultLauncher<String> export =
+      registerForActivityResult(
+          new ActivityResultContracts.CreateDocument("application/json"),
+          uri -> {
+            if (uri != null)
+              safe(
+                  () -> {
+                    try (OutputStream o = getContentResolver().openOutputStream(uri)) {
+                      o.write(db.backup().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                    toast("Backup saved");
+                  });
+          });
+  ActivityResultLauncher<String[]> restore =
+      registerForActivityResult(
+          new ActivityResultContracts.OpenDocument(),
+          uri -> {
+            if (uri != null)
+              safe(
+                  () -> {
+                    String text;
+                    try (InputStream in = getContentResolver().openInputStream(uri);
+                        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                      byte[] b = new byte[8192];
+                      int n;
+                      while ((n = in.read(b)) != -1) {
+                        if (out.size() + n > 10000000) throw new Exception("Backup too large");
+                        out.write(b, 0, n);
+                      }
+                      text = out.toString("UTF-8");
+                    }
+                    final String data = text;
+                    new AlertDialog.Builder(this)
+                        .setTitle("Replace all local data?")
+                        .setMessage(
+                            "Restore replaces all foods, batches, history and settings. Export a"
+                                + " backup first. It never merges or duplicates records.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton(
+                            "Replace",
+                            (d, w) ->
+                                safe(
+                                    () -> {
+                                      db.restore(data);
+                                      settings = db.list("settings").get(0);
+                                      home();
+                                    }))
+                        .show();
+                  });
+          });
+
+  public void onCreate(Bundle b) {
+    super.onCreate(b);
+    db = new Data(this);
+    safe(
+        () -> {
+          if (db.list("settings").isEmpty()) {
+            JSONObject s = obj();
+            s.put("id", "settings");
+            s.put("start", LocalDate.now(zone).toString());
+            s.put("duration", 48);
+            s.put("week", 1);
+            s.put("goal", 0);
+            s.put("policy", Estimator.POLICY);
+            db.save("settings", s);
+            JSONObject rate =
+                obj()
+                    .put("id", "initial-rate")
+                    .put("date", LocalDate.now(zone).toString())
+                    .put("value", 2000);
+            db.save("rate", rate);
+          }
+          settings = db.list("settings").get(0);
+          home();
+        });
+  }
+
+  void toast(String s) {
+    Toast.makeText(this, s, Toast.LENGTH_LONG).show();
+  }
+
+  LinearLayout layout() {
+    LinearLayout l = new LinearLayout(this);
+    l.setOrientation(LinearLayout.VERTICAL);
+    l.setPadding(22, 12, 22, 12);
+    return l;
+  }
+
+  void screen(String title) {
+    page = layout();
+    page.setBackgroundColor(0xfff5f5ed);
+    ScrollView s = new ScrollView(this);
+    s.addView(page);
+    setContentView(s);
+    label(page, title, 28);
+  }
+
+  void label(LinearLayout l, String t, int size) {
+    TextView v = new TextView(this);
+    v.setText(t);
+    v.setTextSize(size);
+    v.setTextColor(0xff163d34);
+    v.setPadding(0, 10, 0, 10);
+    l.addView(v);
+  }
+
+  void button(LinearLayout l, String title, Action a) {
+    Button b = new Button(this);
+    b.setText(title);
+    l.addView(b);
+    b.setOnClickListener(v -> safe(a));
+  }
+
+  EditText field(LinearLayout l, String title, String value) {
+    label(l, title, 14);
+    EditText e = new EditText(this);
+    e.setText(value);
+    e.setSingleLine(true);
+    l.addView(e);
+    return e;
+  }
+
+  double num(EditText e) throws Exception {
+    double n = Double.parseDouble(e.getText().toString());
+    if (!Double.isFinite(n)) throw new Exception("Enter a finite number");
+    return n;
+  }
+
+  long timestamp(EditText e) throws Exception {
+    try {
+      return LocalDateTime.parse(e.getText().toString()).atZone(zone).toInstant().toEpochMilli();
+    } catch (Exception x) {
+      throw new Exception("Use date and time like 2026-10-30T18:30");
+    }
+  }
+
+  String time(long n) {
+    return Instant.ofEpochMilli(n)
+        .atZone(zone)
+        .toLocalDateTime()
+        .withSecond(0)
+        .withNano(0)
+        .toString();
+  }
+
+  long midnight(LocalDate d) {
+    return d.atStartOfDay(zone).toInstant().toEpochMilli();
+  }
+
+  double[] nutrition(JSONObject batch) throws Exception {
+    double[] v = new double[4];
+    JSONArray a = batch.getJSONArray("ingredients");
+    String[] keys = {"kcal", "protein", "carbs", "fat"};
+    for (int i = 0; i < a.length(); i++) {
+      JSONObject x = a.getJSONObject(i), f = x.getJSONObject("food");
+      double factor = x.getDouble("quantity") / f.getDouble("basis");
+      for (int k = 0; k < 4; k++) v[k] += f.getDouble(keys[k]) * factor;
+    }
+    return v;
+  }
+
+  double[] intake(long from, long to, long now) throws Exception {
+    double[] sum = new double[4];
+    for (String kind : new String[] {"batch", "direct"})
+      for (JSONObject j : db.list(kind)) {
+        long a = j.getLong("available");
+        Long c = j.isNull("completed") ? null : j.getLong("completed");
+        double fraction =
+            Estimator.fraction(
+                    a, c, (long) (settings.getDouble("duration") * 3600000), from, to, now)
+                * j.getDouble("share");
+        double[] n = nutrition(j);
+        for (int i = 0; i < 4; i++) sum[i] += n[i] * fraction;
+      }
+    return sum;
+  }
+
+  double rate(LocalDate date) throws Exception {
+    String best = "";
+    double value = 0;
+    for (JSONObject r : db.list("rate")) {
+      String d = r.getString("date");
+      if (d.compareTo(date.toString()) <= 0 && d.compareTo(best) > 0) {
+        best = d;
+        value = r.getDouble("value");
+      }
+    }
+    return value;
+  }
+
+  double expenditure(long from, long to) throws Exception {
+    return Energy.accrued(
+        from,
+        to,
+        midnight(LocalDate.parse(settings.getString("start"))),
+        zone,
+        d -> {
+          try {
+            return rate(d);
+          } catch (Exception e) {
+            throw new IllegalStateException(e);
+          }
+        });
+  }
+
+  void home() throws Exception {
+    screen("Batch Nutrition");
+    long now = System.currentTimeMillis();
+    LocalDate today = LocalDate.now(zone),
+        ws =
+            today
+                .minusDays(
+                    Math.floorMod(today.getDayOfWeek().getValue() - settings.getInt("week"), 7))
+                .plusWeeks(weekOffset);
+    long start = midnight(LocalDate.parse(settings.getString("start"))),
+        a = Math.max(start, midnight(ws)),
+        end = midnight(ws.plusWeeks(1)),
+        cut = Math.min(now, end);
+    double[] cumulative = intake(start, now, now), n = intake(a, Math.max(a, cut), now);
+    double balance = expenditure(start, now) - cumulative[0];
+    label(
+        page,
+        String.format(
+            Locale.US,
+            "Estimated cumulative %s\n%,.0f kcal",
+            balance >= 0 ? "deficit" : "surplus",
+            Math.abs(balance)),
+        25);
+    label(page, "Since " + settings.getString("start") + " · as of " + time(now), 13);
+    label(page, "Week of " + ws, 22);
+    button(
+        page,
+        "← Previous week",
+        () -> {
+          weekOffset--;
+          home();
+        });
+    if (weekOffset < 0)
+      button(
+          page,
+          "Next week →",
+          () -> {
+            weekOffset++;
+            home();
+          });
+    double provisional = 0;
+    for (JSONObject batch : db.list("batch"))
+      if (batch.isNull("completed")) {
+        provisional +=
+            nutrition(batch)[0]
+                * batch.getDouble("share")
+                * Estimator.fraction(
+                    batch.getLong("available"),
+                    null,
+                    (long) (settings.getDouble("duration") * 3600000),
+                    a,
+                    Math.max(a, cut),
+                    now);
+      }
+    label(
+        page,
+        String.format(
+            Locale.US,
+            "This week's intake includes %.0f provisional kcal and %.0f kcal from completed"
+                + " records.",
+            provisional,
+            n[0] - provisional),
+        15);
+    double exp = expenditure(a, Math.max(a, cut));
+    label(
+        page,
+        String.format(
+            Locale.US,
+            "Estimated intake: %,.0f kcal\n"
+                + "Protein %.1f g · Carbs %.1f g · Fat %.1f g\n"
+                + "Accrued estimated expenditure: %,.0f kcal\n"
+                + "Estimated balance: %,.0f kcal deficit (negative = surplus)",
+            n[0],
+            n[1],
+            n[2],
+            n[3],
+            exp,
+            exp - n[0]),
+        18);
+    double full = 0;
+    for (int i = 0; i < 7; i++) full += rate(ws.plusDays(i));
+    label(
+        page,
+        String.format(
+            Locale.US,
+            "Full-week target: %,.0f kcal intake\nWeekly deficit goal: %,.0f kcal",
+            full - settings.getDouble("goal"),
+            settings.getDouble("goal")),
+        16);
+    label(
+        page,
+        "Unfinished dishes contribute provisional estimates. Finishing replaces those estimates"
+            + " across the actual interval; earlier weeks may change. Expenditure is your"
+            + " assumption.",
+        14);
+    button(page, "Create dish", () -> batchEditor(null, false));
+    button(
+        page,
+        "Scan food",
+        () -> scan.launch(new Intent(this, CaptureActivity.class).putExtra("mode", "barcode")));
+    button(page, "Foods · manual barcode · quick log", this::foods);
+    label(page, "Available dishes", 23);
+    int count = 0;
+    for (JSONObject b : db.list("batch"))
+      if (b.isNull("completed")) {
+        count++;
+        label(page, b.getString("name") + " · provisional", 19);
+        button(
+            page,
+            "Finished · " + b.getString("name"),
+            () -> {
+              if (System.currentTimeMillis() < b.getLong("available"))
+                throw new Exception("Availability is in the future. Correct it before finishing.");
+              b.put("completed", System.currentTimeMillis());
+              db.save("batch", b);
+              home();
+            });
+        button(page, "Details / edit · " + b.getString("name"), () -> details(b, "batch"));
+      }
+    if (count == 0) label(page, "No available dishes. Create a batch when you cook.", 16);
+    button(page, "History", this::history);
+    button(page, "Settings & backup", this::preferences);
+  }
+
+  void foods() throws Exception {
+    screen("Saved foods");
+    button(page, "Dashboard", this::home);
+    button(
+        page,
+        "Enter barcode",
+        () -> {
+          LinearLayout l = layout();
+          EditText e = field(l, "Barcode or supported product QR", "");
+          new AlertDialog.Builder(this)
+              .setTitle("Look up food")
+              .setView(l)
+              .setPositiveButton("Look up", (d, w) -> lookup(e.getText().toString()))
+              .setNegativeButton("Cancel", null)
+              .show();
+        });
+    button(page, "Create manual food", () -> foodEditor(obj()));
+    label(
+        page,
+        "Open Food Facts · community product data, ODbL. Saved nutrition can be corrected; batch"
+            + " snapshots stay unchanged.",
+        14);
+    for (JSONObject f : db.list("food")) {
+      button(
+          page,
+          f.getString("name") + " · log / edit",
+          () -> {
+            new AlertDialog.Builder(this)
+                .setTitle(f.optString("name"))
+                .setItems(
+                    new String[] {"Log food now", "Edit food"},
+                    (d, w) ->
+                        safe(
+                            () -> {
+                              if (w == 0) quick(f);
+                              else foodEditor(new JSONObject(f.toString()));
+                            }))
+                .show();
+          });
+    }
+  }
+
+  void lookup(String raw) {
+    String code = BarcodeValue.productCode(raw);
+    if (code == null) {
+      toast("Unsupported code. Arbitrary QR URLs are never opened.");
+      return;
+    }
+    toast("Looking up product…");
+    new Thread(
+            () -> {
+              try {
+                HttpURLConnection c =
+                    (HttpURLConnection)
+                        new URL("https://world.openfoodfacts.org/api/v2/product/" + code + ".json")
+                            .openConnection();
+                c.setRequestProperty("User-Agent", "BatchNutrition/1.0 (personal Android tracker)");
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(15000);
+                JSONObject product;
+                try (InputStream in = c.getInputStream();
+                    ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                  byte[] buf = new byte[4096];
+                  int n;
+                  while ((n = in.read(buf)) != -1) {
+                    if (out.size() > 2000000) throw new Exception("Response too large");
+                    out.write(buf, 0, n);
+                  }
+                  JSONObject response = new JSONObject(out.toString("UTF-8"));
+                  if (response.optInt("status") != 1)
+                    throw new Exception("Unknown product; create it manually");
+                  product = response.getJSONObject("product");
+                } finally {
+                  c.disconnect();
+                }
+                JSONObject f =
+                    obj().put("barcode", code).put("name", product.optString("product_name", ""));
+                JSONObject nutrients = product.optJSONObject("nutriments");
+                String suffix =
+                    product.optString("nutrition_data_per").equals("serving")
+                        ? "_serving"
+                        : "_100g";
+                f.put("basis", suffix.equals("_serving") ? 1 : 100);
+                f.put(
+                    "unit",
+                    suffix.equals("_serving")
+                        ? "serving"
+                        : product.optString("nutrition_data_per").equals("100ml") ? "ml" : "g");
+                if (nutrients != null) {
+                  String[] source = {"energy-kcal", "proteins", "carbohydrates", "fat"},
+                      dest = {"kcal", "protein", "carbs", "fat"};
+                  for (int i = 0; i < 4; i++)
+                    if (nutrients.has(source[i] + suffix))
+                      f.put(dest[i], nutrients.getDouble(source[i] + suffix));
+                }
+                runOnUiThread(() -> safe(() -> foodEditor(f)));
+              } catch (Exception e) {
+                runOnUiThread(
+                    () ->
+                        new AlertDialog.Builder(this)
+                            .setTitle("Lookup unavailable")
+                            .setMessage(e.getMessage() + ". Saved foods work offline.")
+                            .setPositiveButton(
+                                "Manual food",
+                                (d, w) -> safe(() -> foodEditor(obj().put("barcode", code))))
+                            .setNegativeButton("Cancel", null)
+                            .show());
+              }
+            })
+        .start();
+  }
+
+  void foodEditor(JSONObject f) throws Exception {
+    screen("Food nutrition");
+    label(
+        page,
+        "Verify the label and basis. Missing values require entry; they are never treated as zero."
+            + " Use g, ml, or serving. Quantities must use this same unit; ml is never converted to"
+            + " g.",
+        15);
+    String[] keys = {"name", "basis", "unit", "kcal", "protein", "carbs", "fat"};
+    String[] names = {
+      "Product name",
+      "Nutrition basis quantity",
+      "Unit: g / ml / serving",
+      "Calories (kcal) per basis",
+      "Protein (g) per basis",
+      "Carbs (g) per basis",
+      "Fat (g) per basis"
+    };
+    EditText[] e = new EditText[7];
+    for (int i = 0; i < 7; i++)
+      e[i] =
+          field(
+              page,
+              names[i],
+              f.has(keys[i]) ? f.optString(keys[i]) : i == 1 ? "100" : i == 2 ? "g" : "");
+    button(
+        page,
+        "Save food",
+        () -> {
+          JSONObject j = new JSONObject(f.toString());
+          for (int i = 0; i < 7; i++)
+            j.put(keys[i], i == 0 || i == 2 ? e[i].getText().toString().trim() : num(e[i]));
+          db.save("food", j);
+          foods();
+        });
+    button(page, "Cancel", this::foods);
+  }
+
+  JSONArray draft;
+  JSONObject editing;
+  EditText batchName, available;
+
+  void batchEditor(JSONObject b, boolean duplicate) throws Exception {
+    editing = b == null ? obj() : new JSONObject(b.toString());
+    if (duplicate) {
+      editing.remove("id");
+      editing.put("completed", JSONObject.NULL);
+      editing.put("share", 1);
+      editing.put("available", System.currentTimeMillis());
+    }
+    draft =
+        editing.has("ingredients")
+            ? new JSONArray(editing.getJSONArray("ingredients").toString())
+            : new JSONArray();
+    batchForm();
+  }
+
+  void batchForm() throws Exception {
+    screen("Create / edit dish");
+    batchName = field(page, "Dish name", editing.optString("name"));
+    available =
+        field(
+            page,
+            "Available from · " + zone,
+            time(editing.optLong("available", System.currentTimeMillis())));
+    label(page, "No cooked weight or portions needed. Ingredient nutrition is snapshotted.", 14);
+    for (int i = 0; i < draft.length(); i++) {
+      final int index = i;
+      JSONObject x = draft.getJSONObject(i);
+      label(
+          page,
+          x.getJSONObject("food").getString("name")
+              + " · "
+              + x.getDouble("quantity")
+              + " "
+              + x.getJSONObject("food").getString("unit"),
+          17);
+      button(
+          page,
+          "Remove ingredient " + (i + 1),
+          () -> {
+            remember();
+            draft.remove(index);
+            batchForm();
+          });
+    }
+    button(
+        page,
+        "Add ingredient",
+        () -> {
+          remember();
+          List<JSONObject> fs = db.list("food");
+          if (fs.isEmpty()) {
+            toast("Save a food first using Foods");
+            return;
+          }
+          String[] names = new String[fs.size()];
+          for (int i = 0; i < names.length; i++) names[i] = fs.get(i).optString("name");
+          new AlertDialog.Builder(this)
+              .setTitle("Choose saved food")
+              .setItems(
+                  names,
+                  (d, w) ->
+                      quantity(
+                          fs.get(w),
+                          q -> {
+                            draft.put(
+                                obj()
+                                    .put("food", new JSONObject(fs.get(w).toString()))
+                                    .put("quantity", q));
+                            batchForm();
+                          }))
+              .show();
+        });
+    button(
+        page,
+        "Save dish",
+        () -> {
+          remember();
+          JSONObject b =
+              new JSONObject(editing.toString())
+                  .put("ingredients", draft)
+                  .put("share", editing.optDouble("share", 1));
+          if (!b.has("completed")) b.put("completed", JSONObject.NULL);
+          db.save("batch", b);
+          home();
+        });
+    button(page, "Cancel", this::home);
+  }
+
+  void remember() throws Exception {
+    editing
+        .put("name", batchName.getText().toString().trim())
+        .put("available", timestamp(available));
+  }
+
+  interface Quantity {
+    void done(double n) throws Exception;
+  }
+
+  void quantity(JSONObject f, Quantity callback) {
+    LinearLayout l = layout();
+    EditText q = field(l, "Quantity in " + f.optString("unit"), "");
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle(f.optString("name"))
+            .setView(l)
+            .setPositiveButton("Add", null)
+            .setNegativeButton("Cancel", null)
+            .create();
+    dialog.setOnShowListener(
+        d ->
+            dialog
+                .getButton(-1)
+                .setOnClickListener(
+                    v ->
+                        safe(
+                            () -> {
+                              double n = num(q);
+                              if (n <= 0 || n > 1000000)
+                                throw new Exception("Enter a positive quantity");
+                              callback.done(n);
+                              dialog.dismiss();
+                            })));
+    dialog.show();
+  }
+
+  void quick(JSONObject f) {
+    quantity(
+        f,
+        q -> {
+          long now = System.currentTimeMillis();
+          JSONObject b =
+              obj()
+                  .put("name", f.getString("name"))
+                  .put("available", now)
+                  .put("completed", now)
+                  .put("share", 1)
+                  .put(
+                      "ingredients",
+                      new JSONArray()
+                          .put(obj().put("food", new JSONObject(f.toString())).put("quantity", q)));
+          db.save("direct", b);
+          home();
+        });
+  }
+
+  void history() throws Exception {
+    screen("History");
+    button(page, "Dashboard", this::home);
+    for (String kind : new String[] {"batch", "direct"})
+      for (JSONObject b : db.list(kind))
+        button(
+            page,
+            b.getString("name") + " · " + (b.isNull("completed") ? "available" : "completed"),
+            () -> details(b, kind));
+  }
+
+  void details(JSONObject b, String kind) throws Exception {
+    screen(b.getString("name"));
+    double[] n = nutrition(b);
+    label(
+        page,
+        String.format(
+            Locale.US,
+            "Whole batch: %.0f kcal · P %.1f · C %.1f · F %.1f g",
+            n[0],
+            n[1],
+            n[2],
+            n[3]),
+        18);
+    JSONArray ingredients = b.getJSONArray("ingredients");
+    for (int i = 0; i < ingredients.length(); i++) {
+      JSONObject x = ingredients.getJSONObject(i);
+      label(
+          page,
+          x.getJSONObject("food").getString("name")
+              + " · "
+              + x.getDouble("quantity")
+              + " "
+              + x.getJSONObject("food").getString("unit"),
+          16);
+    }
+    EditText a = field(page, "Available from · " + zone, time(b.getLong("available"))),
+        c =
+            field(
+                page,
+                "Actual completion (blank = unfinished)",
+                b.isNull("completed") ? "" : time(b.getLong("completed"))),
+        share = field(page, "My consumed share (%)", String.valueOf(100 * b.getDouble("share")));
+    button(
+        page,
+        "Save corrections",
+        () -> {
+          JSONObject copy = new JSONObject(b.toString());
+          copy.put("available", timestamp(a))
+              .put("completed", c.getText().toString().isBlank() ? JSONObject.NULL : timestamp(c))
+              .put("share", num(share) / 100);
+          if (kind.equals("direct")) {
+            if (copy.isNull("completed")) throw new Exception("Direct logs need a timestamp");
+            copy.put("available", copy.getLong("completed"));
+          }
+          db.save(kind, copy);
+          home();
+        });
+    if (kind.equals("batch")) {
+      button(page, "Edit ingredients", () -> batchEditor(b, false));
+      button(page, "Duplicate for new cooking session", () -> batchEditor(b, true));
+      if (!b.isNull("completed"))
+        button(
+            page,
+            "Undo completion",
+            () -> {
+              b.put("completed", JSONObject.NULL);
+              db.save(kind, b);
+              home();
+            });
+    }
+    button(
+        page,
+        "Delete",
+        () ->
+            new AlertDialog.Builder(this)
+                .setMessage("Delete this record and its intake?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(
+                    "Delete",
+                    (d, w) ->
+                        safe(
+                            () -> {
+                              db.delete(b);
+                              home();
+                            }))
+                .show());
+    button(page, "Dashboard", this::home);
+  }
+
+  void preferences() throws Exception {
+    screen("Settings & backup");
+    label(
+        page,
+        "Expenditure is an assumption. Initial default: 2000 kcal/day; set your own value. Changes"
+            + " apply from their effective date. Calendar days accrue by elapsed fraction of the"
+            + " local day, including DST.",
+        15);
+    EditText start = field(page, "Tracking start (YYYY-MM-DD)", settings.getString("start")),
+        duration = field(page, "Expected duration (hours, 1–720)", settings.optString("duration")),
+        week = field(page, "Week starts (1 Mon … 7 Sun)", settings.optString("week")),
+        goal = field(page, "Weekly deficit goal (kcal)", settings.optString("goal")),
+        daily =
+            field(
+                page,
+                "Assumed daily expenditure (kcal)",
+                String.valueOf(rate(LocalDate.now(zone)))),
+        effective = field(page, "Expenditure effective date", LocalDate.now(zone).toString());
+    for (JSONObject r : db.list("rate"))
+      label(page, "From " + r.getString("date") + ": " + r.getDouble("value") + " kcal/day", 14);
+    button(
+        page,
+        "Save settings",
+        () -> {
+          JSONObject s =
+              new JSONObject(settings.toString())
+                  .put("start", LocalDate.parse(start.getText().toString()).toString())
+                  .put("duration", num(duration))
+                  .put("week", Integer.parseInt(week.getText().toString()))
+                  .put("goal", num(goal));
+          LocalDate date = LocalDate.parse(effective.getText().toString());
+          double value = num(daily);
+          Data.validate("settings", s);
+          JSONObject r =
+              obj().put("id", "rate-" + date).put("date", date.toString()).put("value", value);
+          Data.validate("rate", r);
+          if (s.getDouble("goal") >= 7 * value)
+            throw new Exception("Weekly goal must leave a positive intake target");
+          if (LocalDate.parse(s.getString("start")).isAfter(LocalDate.now(zone)))
+            throw new Exception("Tracking start must not be in the future");
+          boolean covered = !date.isAfter(LocalDate.parse(s.getString("start")));
+          for (JSONObject existing : db.list("rate"))
+            if (existing.getString("date").compareTo(s.getString("start")) <= 0) covered = true;
+          if (!covered)
+            throw new Exception("Set an expenditure effective date on or before tracking start");
+          db.getWritableDatabase().beginTransaction();
+          try {
+            for (JSONObject old : db.list("rate"))
+              if (old.getString("date").equals(date.toString())) db.delete(old);
+            db.save("rate", r);
+            db.save("settings", s);
+            db.getWritableDatabase().setTransactionSuccessful();
+          } finally {
+            db.getWritableDatabase().endTransaction();
+          }
+          settings = s;
+          home();
+        });
+    button(page, "Export portable backup", () -> export.launch("batch-nutrition-backup.json"));
+    button(
+        page,
+        "Restore backup (replaces all data)",
+        () -> restore.launch(new String[] {"application/json", "application/octet-stream"}));
+    button(page, "Dashboard", this::home);
+  }
 }
