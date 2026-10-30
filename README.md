@@ -6,8 +6,10 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
 
 ## Daily use
 
-- Dashboard shows estimated cumulative deficit (positive = expenditure minus intake),
-  selected-week intake/macros, accrued estimated expenditure, and a separate full-week target.
+- Home shows three tiles: today’s estimated intake, today’s estimated deficit/surplus,
+  and estimated weekly deficit/surplus from Sunday through now.
+- More → Nutrition details contains cumulative balance, macros, previous weeks and targets.
+  The detailed weekly view follows your configurable week-start setting; the home tile always starts Sunday.
 - Set your own expenditure in **Settings & backup**. Initial assumption is explicitly
   2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
 - **Scan food** or enter a barcode in **Foods**. Lookup uses Open Food Facts. Review

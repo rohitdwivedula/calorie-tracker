@@ -1,4 +1,4 @@
-Batch Nutrition V1 (1.0.0, versionCode 2)
+Batch Nutrition V1 dashboard update (1.0.1, versionCode 3)
 
 Validation performed in this workspace:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
@@ -12,8 +12,8 @@ Validation performed in this workspace:
 - No Android device connected (adb devices empty).
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8138403
-SHA256: 8e3ccfbabd2c172734bdb5f710c87edf91d48e95861bd689d238f6ceb7ee38e6
+Bytes: 8108439
+SHA256: 0da43917821677d7e87c6e941b7c58c701918834e5a37275179dd5cfb1b7e270
 
 Not verified on a device: camera and permission flows, Android SQLite lifecycle,
 backup picker/restore, keyboard/accessibility, process recreation, screen layout,
@@ -29,3 +29,6 @@ Recommended phone acceptance checks:
 7. Export, modify data, restore; repeat restore and verify no duplicate records.
 8. Try malformed backup; verify original history is retained.
 9. Enable airplane mode; verify foods, batches, completion and dashboard work.
+
+Dashboard update: three compact estimate tiles; Sunday-to-now home weekly balance.
+Detailed accounting moved to More → Nutrition details. No stored facts changed.

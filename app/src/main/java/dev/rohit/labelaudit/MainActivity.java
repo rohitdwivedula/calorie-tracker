@@ -113,7 +113,7 @@ public class MainActivity extends ComponentActivity {
             s.put("id", "settings");
             s.put("start", LocalDate.now(zone).toString());
             s.put("duration", 48);
-            s.put("week", 1);
+            s.put("week", 7);
             s.put("goal", 0);
             s.put("policy", Estimator.POLICY);
             db.save("settings", s);
@@ -257,8 +257,132 @@ public class MainActivity extends ComponentActivity {
         });
   }
 
+  int dp(int value) {
+    return Math.round(value * getResources().getDisplayMetrics().density);
+  }
+
+  LinearLayout card(LinearLayout parent) {
+    LinearLayout box = new LinearLayout(this);
+    box.setOrientation(LinearLayout.VERTICAL);
+    box.setPadding(dp(18), dp(8), dp(18), dp(8));
+    android.graphics.drawable.GradientDrawable background =
+        new android.graphics.drawable.GradientDrawable();
+    background.setColor(0xffffffff);
+    background.setCornerRadius(dp(18));
+    box.setBackground(background);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+    params.setMargins(0, dp(5), 0, dp(5));
+    parent.addView(box, params);
+    return box;
+  }
+
+  void tile(String title, double value, String caption) {
+    LinearLayout box = card(page);
+    label(box, title, 14);
+    TextView number = new TextView(this);
+    number.setText(String.format(Locale.US, "%,.0f kcal", Math.abs(value)));
+    number.setTextSize(30);
+    number.setTypeface(null, android.graphics.Typeface.BOLD);
+    number.setTextColor(0xff163d34);
+    box.addView(number);
+    label(box, caption, 12);
+    box.setContentDescription(title + ", " + number.getText() + ", " + caption);
+    box.setOnClickListener(v -> safe(this::summary));
+    box.setFocusable(true);
+  }
+
   void home() throws Exception {
-    screen("Batch Nutrition");
+    screen("Today");
+    long now = System.currentTimeMillis();
+    LocalDate today = LocalDate.now(zone);
+    long start = midnight(LocalDate.parse(settings.getString("start")));
+    long dayStart = Math.max(start, midnight(today));
+    LocalDate sunday = today.minusDays(today.getDayOfWeek().getValue() % 7);
+    long weekStart = Math.max(start, midnight(sunday));
+    double daily = intake(dayStart, now, now)[0];
+    double dailyBalance = expenditure(dayStart, now) - daily;
+    double weeklyBalance = expenditure(weekStart, now) - intake(weekStart, now, now)[0];
+    tile("Estimated intake · today", daily, "So far today");
+    tile(
+        "Estimated " + (dailyBalance >= 0 ? "deficit" : "surplus") + " · today",
+        dailyBalance,
+        "So far today");
+    tile(
+        "Estimated " + (weeklyBalance >= 0 ? "deficit" : "surplus") + " · this week",
+        weeklyBalance,
+        "Sunday–now");
+    boolean provisional = false;
+    for (JSONObject b : db.list("batch"))
+      if (b.isNull("completed") && b.getLong("available") < now) provisional = true;
+    if (provisional) label(page, "Includes unfinished-dish estimates", 12);
+    LinearLayout actions = new LinearLayout(this);
+    actions.setOrientation(LinearLayout.HORIZONTAL);
+    page.addView(actions);
+    Button create = new Button(this);
+    create.setText("+ Dish");
+    actions.addView(create, new LinearLayout.LayoutParams(0, dp(52), 1));
+    create.setOnClickListener(v -> safe(() -> batchEditor(null, false)));
+    Button scanFood = new Button(this);
+    scanFood.setText("Scan food");
+    actions.addView(scanFood, new LinearLayout.LayoutParams(0, dp(52), 1));
+    scanFood.setOnClickListener(
+        v -> scan.launch(new Intent(this, CaptureActivity.class).putExtra("mode", "barcode")));
+    label(page, "Available dishes", 20);
+    int count = 0;
+    for (JSONObject batch : db.list("batch"))
+      if (batch.isNull("completed")) {
+        count++;
+        LinearLayout dish = card(page);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        dish.addView(row);
+        TextView name = new TextView(this);
+        name.setText(batch.getString("name"));
+        name.setTextSize(18);
+        name.setTextColor(0xff163d34);
+        name.setPadding(0, dp(12), dp(8), dp(12));
+        row.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+        name.setOnClickListener(v -> safe(() -> details(batch, "batch")));
+        name.setContentDescription(batch.getString("name") + ", edit dish");
+        name.setFocusable(true);
+        Button finish = new Button(this);
+        finish.setText("Finished");
+        row.addView(finish);
+        finish.setOnClickListener(
+            v ->
+                safe(
+                    () -> {
+                      long completed = System.currentTimeMillis();
+                      if (completed < batch.getLong("available"))
+                        throw new Exception(
+                            "Availability is in the future. Correct it before finishing.");
+                      batch.put("completed", completed);
+                      db.save("batch", batch);
+                      home();
+                    }));
+      }
+    if (count == 0) label(page, "Your dishes will appear here.", 14);
+    button(page, "Foods & quick log", this::foods);
+    button(
+        page,
+        "More",
+        () ->
+            new AlertDialog.Builder(this)
+                .setItems(
+                    new String[] {"Nutrition details", "History", "Settings & backup"},
+                    (d, which) ->
+                        safe(
+                            () -> {
+                              if (which == 0) summary();
+                              else if (which == 1) history();
+                              else preferences();
+                            }))
+                .show());
+  }
+
+  void summary() throws Exception {
+    screen("Nutrition details");
+    button(page, "Back", this::home);
     long now = System.currentTimeMillis();
     LocalDate today = LocalDate.now(zone),
         ws =
@@ -287,7 +411,7 @@ public class MainActivity extends ComponentActivity {
         "← Previous week",
         () -> {
           weekOffset--;
-          home();
+          summary();
         });
     if (weekOffset < 0)
       button(
@@ -295,7 +419,7 @@ public class MainActivity extends ComponentActivity {
           "Next week →",
           () -> {
             weekOffset++;
-            home();
+            summary();
           });
     double provisional = 0;
     for (JSONObject batch : db.list("batch"))
@@ -352,33 +476,7 @@ public class MainActivity extends ComponentActivity {
             + " across the actual interval; earlier weeks may change. Expenditure is your"
             + " assumption.",
         14);
-    button(page, "Create dish", () -> batchEditor(null, false));
-    button(
-        page,
-        "Scan food",
-        () -> scan.launch(new Intent(this, CaptureActivity.class).putExtra("mode", "barcode")));
-    button(page, "Foods · manual barcode · quick log", this::foods);
-    label(page, "Available dishes", 23);
-    int count = 0;
-    for (JSONObject b : db.list("batch"))
-      if (b.isNull("completed")) {
-        count++;
-        label(page, b.getString("name") + " · provisional", 19);
-        button(
-            page,
-            "Finished · " + b.getString("name"),
-            () -> {
-              if (System.currentTimeMillis() < b.getLong("available"))
-                throw new Exception("Availability is in the future. Correct it before finishing.");
-              b.put("completed", System.currentTimeMillis());
-              db.save("batch", b);
-              home();
-            });
-        button(page, "Details / edit · " + b.getString("name"), () -> details(b, "batch"));
-      }
-    if (count == 0) label(page, "No available dishes. Create a batch when you cook.", 16);
-    button(page, "History", this::history);
-    button(page, "Settings & backup", this::preferences);
+    button(page, "Back to home", this::home);
   }
 
   void foods() throws Exception {
