@@ -1,9 +1,9 @@
-Batch Nutrition V1 dashboard update (1.0.2, versionCode 4)
+Batch Nutrition V1 dashboard update (1.0.3, versionCode 5)
 
 Validation performed in this workspace:
 - JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
 - :app:assembleDebug, :app:testDebugUnitTest, :app:lintDebug passed.
-- 17 JUnit tests passed: 6 barcode, 7 allocation, 4 expenditure.
+- 24 JUnit tests passed: 6 barcode, 7 allocation, 4 expenditure, 7 serving/conversion.
 - Lint: zero errors; warnings include retained dependency/target versions,
   ARM64-only ChromeOS compatibility, backup configuration and untranslated strings.
 - APK signature verified (v2); zipalign -c -P 16 4 passed.
@@ -12,8 +12,8 @@ Validation performed in this workspace:
 - No Android device connected (adb devices empty).
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8111311
-SHA256: 42b9509a2f2ea3e2f0252ae6bc76232ca1d8eb8ca21364358ecc40a9506b2645
+Bytes: 8162695
+SHA256: e0360aca2e8eb31e47ce756a65d8edef756490e168d97340623268c9fae1a7a5
 
 Not verified on a device: camera and permission flows, Android SQLite lifecycle,
 backup picker/restore, keyboard/accessibility, process recreation, screen layout,
@@ -37,3 +37,9 @@ Cooking-flow update: inline ingredient scan/manual/saved selection; automatic
 availability on save; optional native date/time picker; draft state retained across
 activity recreation; decimal keyboard for ingredient quantities. Build, tests, lint,
 APK signature and alignment checks repeated successfully. Phone UI testing pending.
+
+Serving-first update: live tomato endpoint inspected: serving_size 0.5 cup (121 g),
+25 kcal per serving; conflicting structured ml unit handled with explicit text g.
+Nutrition-label view uses per-serving fields where present and exact saved unit
+conversions. Slider/text quantity and live selected totals added. Build, 24 tests,
+lint, APK signature and alignment checks passed. Physical-device UI testing pending.

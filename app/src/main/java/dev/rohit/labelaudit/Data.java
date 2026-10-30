@@ -70,6 +70,8 @@ public final class Data extends SQLiteOpenHelper {
     if (kind.equals("food")) {
       if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       number(j, "basis", 0.001, 100000);
+      if (j.has("servingGrams")) number(j, "servingGrams", 0.001, 100000);
+      if (j.has("servingMl")) number(j, "servingMl", 0.001, 100000);
       if (!Arrays.asList("g", "serving", "ml").contains(j.getString("unit")))
         throw new Exception("Invalid unit");
       for (String k : new String[] {"kcal", "protein", "carbs", "fat"}) number(j, k, 0, 100000);

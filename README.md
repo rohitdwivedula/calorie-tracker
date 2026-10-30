@@ -15,9 +15,19 @@ it is gone. No cooked weight, meal categories, portions, account, OCR, or backen
 - **Scan food** or enter a barcode in **Foods**. Lookup uses Open Food Facts. Review
   the product's nutrition basis and save; incomplete nutrition requires manual entry.
   Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
-- Foods may use grams, milliliters, or servings. Enter quantities in the food's exact
-  basis unit. There is no implicit ml-to-gram or serving-to-gram conversion. To use
-  another basis, create a food with the label's valid nutrition for that basis.
+- Scanned foods open a nutrition-label page, preferring the package serving size and
+  per-serving nutrient fields from Open Food Facts. Values are rounded for display;
+  calculations retain their precision. Choose servings, grams or milliliters with a
+  slider and editable quantity; selected calories/macros update live. Grams/volume
+  controls appear only with an explicit per-serving conversion. No ml-to-g assumption.
+- Explicit g/ml amounts in serving-size text take precedence over structured unit
+  metadata (which can conflict). Ambiguous fractions/decimal-comma text require a
+  correction rather than a guessed conversion. A missing serving size falls back
+  to the API's nutrition basis. Missing nutrients require correction, never zero.
+- Edit nutrition / serving size is a secondary action. Corrections allow optional
+  grams or ml per serving. Saved foods without serving metadata still work in their
+  original units; rescan to retrieve current serving information. Existing batch
+  snapshots are unaffected.
 - Create a dish and tap Add ingredient: scan a barcode, enter a food manually, or choose
   a saved food. Save the food and enter its quantity to return to your dish. The dish
   name and ingredients are retained while scanning/adding foods. Availability defaults

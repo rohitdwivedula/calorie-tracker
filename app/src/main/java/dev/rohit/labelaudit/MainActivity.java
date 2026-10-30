@@ -567,24 +567,49 @@ public class MainActivity extends ComponentActivity {
                 JSONObject f =
                     obj().put("barcode", code).put("name", product.optString("product_name", ""));
                 JSONObject nutrients = product.optJSONObject("nutriments");
-                String suffix =
-                    product.optString("nutrition_data_per").equals("serving")
-                        ? "_serving"
-                        : "_100g";
-                f.put("basis", suffix.equals("_serving") ? 1 : 100);
-                f.put(
-                    "unit",
-                    suffix.equals("_serving")
-                        ? "serving"
-                        : product.optString("nutrition_data_per").equals("100ml") ? "ml" : "g");
+                String servingLabel = product.optString("serving_size", "");
+                double grams = Portion.labelAmount(servingLabel, "g"),
+                    ml = Portion.labelAmount(servingLabel, "ml");
+                if (grams == 0 && ml == 0) {
+                  String declaredUnit = product.optString("serving_quantity_unit");
+                  double amount = product.optDouble("serving_quantity", 0);
+                  if (Double.isFinite(amount) && amount > 0) {
+                    if (declaredUnit.equals("g")) grams = amount;
+                    else if (declaredUnit.equals("ml")) ml = amount;
+                  }
+                }
+                boolean hasServing =
+                    !servingLabel.isEmpty()
+                        || grams > 0
+                        || ml > 0
+                        || product.optString("nutrition_data_per").equals("serving");
+                f.put("basis", hasServing ? 1 : 100)
+                    .put(
+                        "unit",
+                        hasServing
+                            ? "serving"
+                            : product.optString("nutrition_data_per").equals("100ml") ? "ml" : "g");
+                if (grams > 0) f.put("servingGrams", grams);
+                if (ml > 0) f.put("servingMl", ml);
+                f.put("servingLabel", servingLabel);
                 if (nutrients != null) {
                   String[] source = {"energy-kcal", "proteins", "carbohydrates", "fat"},
                       dest = {"kcal", "protein", "carbs", "fat"};
-                  for (int i = 0; i < 4; i++)
-                    if (nutrients.has(source[i] + suffix))
-                      f.put(dest[i], nutrients.getDouble(source[i] + suffix));
+                  for (int i = 0; i < 4; i++) {
+                    if (hasServing && nutrients.has(source[i] + "_serving"))
+                      f.put(dest[i], nutrients.getDouble(source[i] + "_serving"));
+                    else if (nutrients.has(source[i] + "_100g")) {
+                      if (!hasServing) f.put(dest[i], nutrients.getDouble(source[i] + "_100g"));
+                      else if (grams > 0 && ml == 0)
+                        f.put(dest[i], nutrients.getDouble(source[i] + "_100g") * grams / 100);
+                      else if (ml > 0
+                          && grams == 0
+                          && product.optString("nutrition_data_per").equals("100ml"))
+                        f.put(dest[i], nutrients.getDouble(source[i] + "_100g") * ml / 100);
+                    }
+                  }
                 }
-                runOnUiThread(() -> safe(() -> foodEditor(f)));
+                runOnUiThread(() -> safe(() -> showFood(f)));
               } catch (Exception e) {
                 runOnUiThread(
                     () ->
@@ -601,14 +626,44 @@ public class MainActivity extends ComponentActivity {
         .start();
   }
 
+  void showFood(JSONObject f) throws Exception {
+    if (!f.has("id")) f.put("id", UUID.randomUUID().toString());
+    try {
+      Data.validate("food", f);
+    } catch (Exception incomplete) {
+      toast("Complete the missing nutrition from the label");
+      foodEditor(f);
+      return;
+    }
+    if (addingIngredient) ingredientQuantity(f);
+    else
+      quantity(
+          f,
+          q -> {
+            db.save("food", f);
+            quickWithQuantity(f, q);
+          });
+  }
+
+  void quickWithQuantity(JSONObject f, double q) throws Exception {
+    long now = System.currentTimeMillis();
+    db.save(
+        "direct",
+        obj()
+            .put("name", f.getString("name"))
+            .put("available", now)
+            .put("completed", now)
+            .put("share", 1)
+            .put(
+                "ingredients",
+                new JSONArray()
+                    .put(obj().put("food", new JSONObject(f.toString())).put("quantity", q))));
+    home();
+  }
+
   void foodEditor(JSONObject f) throws Exception {
     screen("Food nutrition");
-    label(
-        page,
-        "Verify the label and basis. Missing values require entry; they are never treated as zero."
-            + " Use g, ml, or serving. Quantities must use this same unit; ml is never converted to"
-            + " g.",
-        15);
+    label(page, "Enter nutrition exactly as shown on the label.", 14);
     String[] keys = {"name", "basis", "unit", "kcal", "protein", "carbs", "fat"};
     String[] names = {
       "Product name",
@@ -626,16 +681,36 @@ public class MainActivity extends ComponentActivity {
               page,
               names[i],
               f.has(keys[i]) ? f.optString(keys[i]) : i == 1 ? "100" : i == 2 ? "g" : "");
+    EditText servingGrams =
+        field(
+            page,
+            "Grams in one serving (optional)",
+            f.has("servingGrams") ? display(f.optDouble("servingGrams")) : "");
+    EditText servingMl =
+        field(
+            page,
+            "mL in one serving (optional)",
+            f.has("servingMl") ? display(f.optDouble("servingMl")) : "");
     button(
         page,
-        addingIngredient ? "Save & add to dish" : "Save food",
+        "Continue",
         () -> {
           JSONObject j = new JSONObject(f.toString());
           for (int i = 0; i < 7; i++)
             j.put(keys[i], i == 0 || i == 2 ? e[i].getText().toString().trim() : num(e[i]));
-          db.save("food", j);
+          j.remove("servingLabel");
+          j.remove("servingGrams");
+          j.remove("servingMl");
+          if (!servingGrams.getText().toString().isBlank())
+            j.put("servingGrams", num(servingGrams));
+          if (!servingMl.getText().toString().isBlank()) j.put("servingMl", num(servingMl));
+          if (!j.has("id")) j.put("id", UUID.randomUUID().toString());
+          Data.validate("food", j);
           if (addingIngredient) ingredientQuantity(j);
-          else foods();
+          else {
+            db.save("food", j);
+            foods();
+          }
         });
     button(
         page,
@@ -783,10 +858,10 @@ public class MainActivity extends ComponentActivity {
   }
 
   void ingredientQuantity(JSONObject food) throws Exception {
-    batchForm();
     quantity(
         food,
         q -> {
+          db.save("food", food);
           draft.put(obj().put("food", new JSONObject(food.toString())).put("quantity", q));
           addingIngredient = false;
           batchForm();
@@ -808,32 +883,192 @@ public class MainActivity extends ComponentActivity {
     void done(double n) throws Exception;
   }
 
+  String display(double n) {
+    return String.format(Locale.US, "%.2f", n).replaceAll("0+$", "").replaceAll("\\.$", "");
+  }
+
   void quantity(JSONObject f, Quantity callback) {
-    LinearLayout l = layout();
-    EditText q = field(l, "Quantity in " + f.optString("unit"), "");
-    q.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-    AlertDialog dialog =
-        new AlertDialog.Builder(this)
-            .setTitle(f.optString("name"))
-            .setView(l)
-            .setPositiveButton("Add", null)
-            .setNegativeButton("Cancel", null)
-            .create();
-    dialog.setOnShowListener(
-        d ->
-            dialog
-                .getButton(-1)
-                .setOnClickListener(
-                    v ->
-                        safe(
-                            () -> {
-                              double n = num(q);
-                              if (n <= 0 || n > 1000000)
-                                throw new Exception("Enter a positive quantity");
-                              callback.done(n);
-                              dialog.dismiss();
-                            })));
-    dialog.show();
+    safe(
+        () -> {
+          screen(f.getString("name"));
+          double grams = f.optDouble("servingGrams", 0), ml = f.optDouble("servingMl", 0);
+          String base = f.getString("unit");
+          LinearLayout facts = card(page);
+          label(facts, "Nutrition facts", 24);
+          String serving = f.optString("servingLabel", "");
+          if (serving.isEmpty() && base.equals("serving"))
+            serving =
+                grams > 0 ? display(grams) + " g" : ml > 0 ? display(ml) + " ml" : "1 serving";
+          label(
+              facts,
+              base.equals("serving")
+                  ? "Per serving · " + serving
+                  : "Per " + display(f.getDouble("basis")) + " " + base,
+              14);
+          TextView calories = new TextView(this);
+          calories.setTextSize(32);
+          calories.setTypeface(null, android.graphics.Typeface.BOLD);
+          calories.setTextColor(0xff163d34);
+          facts.addView(calories);
+          String[] keys = {"protein", "carbs", "fat"}, names = {"Protein", "Carbohydrate", "Fat"};
+          TextView[] macros = new TextView[3];
+          for (int i = 0; i < 3; i++) {
+            android.view.View line = new android.view.View(this);
+            line.setBackgroundColor(0xff163d34);
+            facts.addView(line, new LinearLayout.LayoutParams(-1, dp(i == 0 ? 3 : 1)));
+            macros[i] = new TextView(this);
+            macros[i].setTextSize(18);
+            macros[i].setTextColor(0xff163d34);
+            macros[i].setPadding(0, dp(10), 0, dp(10));
+            facts.addView(macros[i]);
+          }
+          calories.setText(String.format(Locale.US, "Calories  %,.0f", f.getDouble("kcal")));
+          for (int i = 0; i < 3; i++)
+            macros[i].setText(
+                names[i] + "     " + String.format(Locale.US, "%.1f g", f.getDouble(keys[i])));
+          label(page, "How much are you adding?", 20);
+          ArrayList<String> units = new ArrayList<>();
+          if (base.equals("serving")
+              || base.equals("g") && grams > 0
+              || base.equals("ml") && ml > 0) units.add("serving");
+          if (base.equals("g") || base.equals("serving") && grams > 0) units.add("g");
+          if (base.equals("ml") || base.equals("serving") && ml > 0) units.add("ml");
+          Spinner unit = new Spinner(this);
+          ArrayList<String> unitLabels = new ArrayList<>();
+          for (String u : units)
+            unitLabels.add(
+                u.equals("serving") ? "Servings" : u.equals("g") ? "Grams" : "Milliliters");
+          unit.setAdapter(
+              new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, unitLabels));
+          page.addView(unit);
+          EditText amount =
+              field(
+                  page,
+                  "Quantity",
+                  units.get(0).equals("serving") ? "1" : display(f.getDouble("basis")));
+          amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+          SeekBar slider = new SeekBar(this);
+          slider.setMax(units.get(0).equals("serving") ? 79 : 1999);
+          page.addView(slider);
+          TextView total = new TextView(this);
+          total.setTextSize(18);
+          total.setTextColor(0xff163d34);
+          page.addView(total);
+          final boolean[] updating = {false};
+          final String[] previous = {units.get(0)};
+          Runnable update =
+              () -> {
+                try {
+                  double value = Double.parseDouble(amount.getText().toString());
+                  String selected = units.get(unit.getSelectedItemPosition());
+                  double canonical = Portion.convert(value, selected, base, grams, ml);
+                  double factor = canonical / f.getDouble("basis");
+                  total.setText(
+                      String.format(
+                          Locale.US,
+                          "Selected: %,.0f kcal · P %.1f g · C %.1f g · F %.1f g",
+                          f.getDouble("kcal") * factor,
+                          f.getDouble("protein") * factor,
+                          f.getDouble("carbs") * factor,
+                          f.getDouble("fat") * factor));
+                  if (!updating[0]) {
+                    updating[0] = true;
+                    slider.setProgress(
+                        (int) Math.round(selected.equals("serving") ? value * 4 - 1 : value - 1));
+                    updating[0] = false;
+                  }
+                } catch (Exception invalid) {
+                  total.setText("Enter a positive quantity");
+                }
+              };
+          amount.addTextChangedListener(
+              new android.text.TextWatcher() {
+                public void beforeTextChanged(CharSequence t, int st, int count, int after) {}
+
+                public void onTextChanged(CharSequence t, int st, int before, int count) {
+                  update.run();
+                }
+
+                public void afterTextChanged(android.text.Editable e) {}
+              });
+          slider.setOnSeekBarChangeListener(
+              new SeekBar.OnSeekBarChangeListener() {
+                public void onStartTrackingTouch(SeekBar b) {}
+
+                public void onStopTrackingTouch(SeekBar b) {}
+
+                public void onProgressChanged(SeekBar b, int progress, boolean user) {
+                  if (user) {
+                    updating[0] = true;
+                    amount.setText(
+                        display(
+                            units.get(unit.getSelectedItemPosition()).equals("serving")
+                                ? (progress + 1) / 4.0
+                                : progress + 1));
+                    updating[0] = false;
+                  }
+                }
+              });
+          unit.setOnItemSelectedListener(
+              new android.widget.AdapterView.OnItemSelectedListener() {
+                public void onNothingSelected(android.widget.AdapterView<?> a) {}
+
+                public void onItemSelected(
+                    android.widget.AdapterView<?> a, android.view.View v, int pos, long id) {
+                  String selected = units.get(pos);
+                  slider.setMax(selected.equals("serving") ? 79 : 1999);
+                  try {
+                    double converted =
+                        Portion.convert(
+                            Double.parseDouble(amount.getText().toString()),
+                            previous[0],
+                            selected,
+                            grams,
+                            ml);
+                    previous[0] = selected;
+                    amount.setText(
+                        java.math.BigDecimal.valueOf(converted)
+                            .setScale(6, java.math.RoundingMode.HALF_UP)
+                            .stripTrailingZeros()
+                            .toPlainString());
+                  } catch (Exception ignored) {
+                    previous[0] = selected;
+                    amount.setText("1");
+                  }
+                  update.run();
+                }
+              });
+          button(
+              page,
+              addingIngredient ? "Add to dish" : "Log food",
+              () -> {
+                double canonical =
+                    Portion.convert(
+                        num(amount), units.get(unit.getSelectedItemPosition()), base, grams, ml);
+                if (canonical > 1000000) throw new Exception("Quantity is too large");
+                callback.done(canonical);
+              });
+          button(
+              page,
+              "Edit nutrition / serving size",
+              () -> foodEditor(new JSONObject(f.toString())));
+          if (!addingIngredient)
+            button(
+                page,
+                "Save food only",
+                () -> {
+                  db.save("food", f);
+                  foods();
+                });
+          button(
+              page,
+              "Cancel",
+              () -> {
+                if (addingIngredient) batchForm();
+                else foods();
+              });
+          update.run();
+        });
   }
 
   void quick(JSONObject f) {
