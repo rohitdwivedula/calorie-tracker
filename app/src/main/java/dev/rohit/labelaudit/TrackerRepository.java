@@ -35,6 +35,22 @@ public final class TrackerRepository {
 
   public void reload() {
     settings = db.list("settings").get(0);
+    if (!settings.has("energyStart")) {
+      // Explicit model boundary: preserve old total-expenditure rates and historical results.
+      String today = LocalDate.now(zone).toString();
+      android.database.sqlite.SQLiteDatabase sql = db.getWritableDatabase();
+      sql.beginTransaction();
+      try {
+        db.save("resting", new JSONObject().put("date", today).put("value", 1766));
+        settings.put("energyStart", today);
+        db.save("settings", settings);
+        sql.setTransactionSuccessful();
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      } finally {
+        sql.endTransaction();
+      }
+    }
   }
 
   public String display(double n) {
@@ -173,18 +189,63 @@ public final class TrackerRepository {
     return value;
   }
 
-  public double expenditure(long from, long to) throws Exception {
-    return Energy.accrued(
-        from,
-        to,
-        midnight(LocalDate.parse(settings.getString("start"))),
-        zone,
-        d -> {
-          try {
-            return rate(d);
-          } catch (Exception e) {
-            throw new IllegalStateException(e);
-          }
-        });
+  public double restingRate(LocalDate date) throws Exception {
+    String best = "";
+    double value = 0;
+    for (JSONObject r : db.list("resting")) {
+      String d = r.getString("date");
+      if (d.compareTo(date.toString()) <= 0 && d.compareTo(best) > 0) {
+        best = d;
+        value = r.getDouble("value");
+      }
+    }
+    return value;
+  }
+
+  public double extraActivity(LocalDate date) throws Exception {
+    double result = 0;
+    for (JSONObject a : db.list("activity"))
+      if (date.toString().equals(a.getString("date"))) result += a.getDouble("kcal");
+    return result;
+  }
+
+  public DailyExpenditure.Estimate dailyExpenditure(LocalDate date, long now) throws Exception {
+    if (date.isBefore(LocalDate.parse(settings.getString("start")))
+        || date.isAfter(Instant.ofEpochMilli(now).atZone(zone).toLocalDate()))
+      return new DailyExpenditure.Estimate(0, 0, null, 0, false, true, false);
+    long from = midnight(date), to = Math.min(now, midnight(date.plusDays(1)));
+    if (date.isBefore(LocalDate.parse(settings.getString("energyStart")))) {
+      double old =
+          Energy.accrued(
+              from,
+              to,
+              midnight(LocalDate.parse(settings.getString("start"))),
+              zone,
+              d -> {
+                try {
+                  return rate(d);
+                } catch (Exception e) {
+                  throw new IllegalStateException(e);
+                }
+              });
+      return new DailyExpenditure.Estimate(old, 0, null, 0, false, false, true);
+    }
+    JSONObject cache = db.stepCache(date.toString(), zone.getId());
+    Long steps = cache.has("steps") && !cache.isNull("steps") ? cache.getLong("steps") : null;
+    long ttl =
+        date.equals(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
+            ? 15 * 60000L
+            : 7 * 86400000L;
+    String access = db.stepCache("_connection", "_").optString("status", "ok");
+    boolean stale =
+        !"ok".equals(access)
+            || !"ok".equals(cache.optString("status"))
+            || now - cache.optLong("synced", 0) > ttl
+            || (date.isBefore(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
+                && cache.optLong("through", 0) < midnight(date.plusDays(1)));
+    double accruedResting =
+        restingRate(date) * (to - from) / (double) (midnight(date.plusDays(1)) - from);
+    return DailyExpenditure.calculate(
+        accruedResting, nutrientTotals(from, to, now), steps, extraActivity(date), stale);
   }
 }

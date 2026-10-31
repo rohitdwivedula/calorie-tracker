@@ -144,6 +144,14 @@ fun SummaryScreen(v: TrackerViewModel) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            if (shown.incompleteDays > 0)
+                Text(
+                    "${shown.incompleteDays} days have incomplete expenditure data",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            if (focused != null && mode == 0)
+                TextButton(onClick = { v.openEnergy(from) }) { Text("View expenditure") }
             HorizontalDivider()
             InfoRow(
                 "Average daily intake",
@@ -168,12 +176,24 @@ fun SummaryScreen(v: TrackerViewModel) {
             }
         }
         if (mode == 0)
-            Section("Full-week target") {
-                val target =
-                    (0..6).sumOf { r.rate(start.plusDays(it.toLong())) } -
-                        r.settings.getDouble("goal")
-                InfoRow("Intake", "${kcal(target)} kcal")
+            Section("Full-week goal") {
+                val boundary = LocalDate.parse(r.settings.getString("energyStart"))
+                val guide =
+                    (0..6).sumOf {
+                        val d = start.plusDays(it.toLong())
+                        if (d < boundary) r.rate(d) else r.restingRate(d)
+                    } - r.settings.getDouble("goal")
                 InfoRow("Deficit goal", "${kcal(r.settings.getDouble("goal"))} kcal")
+                InfoRow(
+                    if (end <= boundary) "Intake target" else "Resting-only intake guide",
+                    "${kcal(guide)} kcal",
+                )
+                if (end > boundary)
+                    Text(
+                        "Guide excludes digestion and activity; final expenditure depends on recorded data.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
             }
         Section("Since tracking began") {
             Metric(

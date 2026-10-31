@@ -35,7 +35,12 @@ class LoggedHistoryTest {
         context.deleteDatabase("nutrition.db")
         r = TrackerRepository(context)
         r.db.list("rate").forEach { r.db.delete(it) }
-        r.db.save("settings", r.settings.put("start", start.toString()))
+        r.db.save(
+            "settings",
+            r.settings
+                .put("start", start.toString())
+                .put("energyStart", today.plusDays(1).toString()),
+        )
         r.db.save(
             "rate",
             JSONObject().put("id", "test-rate").put("date", start.toString()).put("value", 2400),

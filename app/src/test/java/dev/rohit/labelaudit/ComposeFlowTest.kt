@@ -163,6 +163,45 @@ class ComposeFlowTest {
         ui.onNodeWithText("Seitan pasta").assertIsDisplayed()
     }
 
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun expenditureActivityCanBeAddedEditedAndDeletedWithMaterialControls() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.openEnergy()
+        }
+        ui.onNodeWithText("Resting so far").assertIsDisplayed()
+        ui.onNodeWithText("Add activity calories").performScrollTo().performClick()
+        ui.onNodeWithText("Additional kcal").performTextInput("100")
+        ui.onNodeWithText("Description (optional)").performTextInput("Lifting")
+        screenshot("activity-calories")
+        ui.onNodeWithText("Save activity").performClick()
+        ui.onNodeWithText("Lifting").performScrollTo().assertIsDisplayed()
+        screenshot("expenditure")
+        ui.onNodeWithText("Edit").performClick()
+        ui.onNodeWithText("Additional kcal").performTextReplacement("150")
+        ui.onNodeWithText("Save activity").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(1, v.repo.db.list("activity").size)
+            org.junit.Assert.assertEquals(
+                150.0,
+                v.repo.extraActivity(java.time.LocalDate.now(v.repo.zone)),
+                0.0,
+            )
+        }
+        ui.onNodeWithText("Edit").performScrollTo().performClick()
+        ui.onNodeWithText("Delete activity").performClick()
+        ui.onNodeWithText("Its extra expenditure will be removed.").assertIsDisplayed()
+        ui.onNodeWithText("Delete").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(0, v.repo.db.list("activity").size)
+        }
+        ui.onNodeWithContentDescription("Back").performClick()
+        ui.onNodeWithText("New dish").assertIsDisplayed()
+    }
+
     // Robolectric #8460: dialogs with text input loop with width qualifiers above 320dp.
     // Keep the interaction test on its supported profile; other screenshots use 411dp.
     @Config(qualifiers = "w320dp-h891dp-xhdpi")

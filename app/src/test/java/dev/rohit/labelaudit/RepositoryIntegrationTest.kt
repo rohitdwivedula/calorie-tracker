@@ -62,7 +62,7 @@ class RepositoryIntegrationTest {
             db.version = 2
         }
         Data(context).use { db ->
-            assertEquals(3, db.readableDatabase.version)
+            assertEquals(4, db.readableDatabase.version)
             assertEquals("Test food", db.list("food").single().getString("name"))
             assertEquals(0, db.lookupArchive().length())
         }

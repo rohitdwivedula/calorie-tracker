@@ -17,7 +17,7 @@ Rendered test previews are in [docs/screenshots](docs/screenshots/README.md).
 Screens and shared components are split under `ui/`. `TrackerRepository` contains
 the existing Java accounting/persistence queries, `FoodLookup` handles explicit
 archived API lookup, and `BatchOperations` edits recorded facts without UI code.
-Database schema 3, backup schemas 1–3, package identity and nutrition snapshots are
+Database schema 4, backup schemas 1–4, package identity and nutrition snapshots are
 preserved. Returning to the app refreshes the as-of calculations.
 
 Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
@@ -65,7 +65,7 @@ expenditure accrues through the same as-of instant; historical days use their ef
 expenditure rates and full local calendar days, including daylight-saving transitions.
 Empty days do not generate a deficit. The full-week target is separate.
 `LoggedHistory` is a rebuildable calculation over the existing authoritative records;
-no schema change or stored inferred history is needed. Legacy linear allocations can
+no stored inferred history is needed. Legacy linear allocations can
 contribute on eligible dates and are labeled when present; they never establish
 new logged dates by themselves.
 
@@ -81,6 +81,59 @@ use normalized mass values. Missing nutrients stay absent. Goals are stored with
 settings and included in backups. Old snapshots remain unchanged when saved food
 nutrition is updated; rescan to obtain optional values for future ingredients.
 
+## Expenditure
+
+Today compares expenditure accrued so far with intake recorded so far. Resting
+metabolic rate starts at **1,766 kcal/day** and is editable with an effective date.
+Resting accrues by elapsed fraction of the local calendar day (including 23/25-hour
+DST days). Previous dates keep their effective resting rate. Digestion, steps and
+extra activity are added as recorded; this is not a full-day forecast.
+
+Expand **Spent so far** on Today for Resting / Food digestion / Steps / Extra activity.
+**Daily details & activity**, **Settings → Steps & activity**, or a selected daily chart
+bar opens the dated detail screen. Add activity calories with a date, additional kcal
+and optional description; multiple entries can be edited or deleted. These are only
+calories above resting and beyond movement already counted through steps.
+
+Digestion uses the existing per-day macro allocations without reducing food calories:
+`protein × 4 × 0.25 + carbs × 4 × 0.075 + fat × 9 × 0.02`.
+These fixed coefficients are approximations within the ranges discussed by
+[Westerterp (2004)](https://pmc.ncbi.nlm.nih.gov/articles/PMC524030/), not individual
+measurements. They live in `ExpenditureCoefficients.java`, together with the requested
+30 kcal per 1,000 steps, and are not configurable in Settings. Missing macros leave
+TEF incomplete (a known minimum when some macros are available), never assumed zero.
+
+Steps use AndroidX Health Connect 1.1.0. Only READ_STEPS is requested, in the foreground;
+no writes, raw-record sums, custom counter, active-energy import or background permission.
+`aggregate(AggregateRequest(metrics = setOf(StepsRecord.COUNT_TOTAL), ...))` queries all
+origins together, relying on Health Connect's priority-based deduplication as described
+in the official [aggregate](https://developer.android.com/health-and-fitness/health-connect/aggregate-data)
+and [read](https://developer.android.com/health-and-fitness/health-connect/read-data) guides.
+Android 14+ uses the platform module; older supported phones may need Health Connect
+installed. Samsung Health/watch data reaches the app only through Health Connect.
+
+Launch/resume refreshes today and up to 30 recent dates since the new model began;
+viewing a date and Refresh steps also requery that date. Each local date/time-zone key
+is replaced, not incremented. Cache entries retain the last successful count, sync time,
+covered-through instant and latest attempt/status. A successful measured zero is
+separate from no data. Failure or revoked permission preserves saved inputs while
+marking estimates incomplete/stale. A previous day's partial sync stays incomplete
+until a read covers the whole day. Food logging works without Health Connect.
+
+SQLite v3→v4 adds a separate step cache. On first use, a recorded model-start date and
+new resting-rate input are added transactionally. Old total-expenditure `rate` records
+are preserved; dates before the boundary retain their old accounting. No old total
+rate is relabeled as resting. Portable backups include resting rates and extra activities
+as authoritative records, plus a separate validated `cachedSteps` section to preserve
+measured history across reinstalls and Health Connect's historical-read limits. Restored
+step snapshots are flagged stale until refreshed; permissions/connection are rechecked.
+No derived TEF or expenditure totals are stored. Old backups (schemas 1–3) still restore.
+
+Weekly/cumulative balance and nutrient averages continue to count only days with food
+intake logged. An activity-only day does not establish a logged food day. The full-week
+deficit goal remains separate; the new resting-only intake guide excludes digestion
+and activity rather than inventing future expenditure.
+
 ## Daily use
 
 - Home shows three tiles: today’s estimated intake, today’s estimated deficit/surplus,
@@ -90,7 +143,8 @@ nutrition is updated; rescan to obtain optional values for future ingredients.
   default to Sunday weeks and honor the configurable week-start setting; the home
   weekly tile always starts Sunday.
 - Set your own expenditure in **Settings (gear icon)**. Initial assumption is explicitly
-  2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
+  1,766 kcal/day resting. Set its effective date, tracking start, weekly deficit goal,
+  week start and expected duration. Existing total-expenditure history remains separate.
 - **Quick log** opens the camera. Scan a barcode, enter a barcode manually, or use
   **Add calories** for a calorie-only record (for example, 120 kcal). These records
   have unknown macros; the summary labels macro totals as incomplete when relevant.
@@ -148,7 +202,7 @@ ingredient snapshots carry only `lookupId` references; they do not duplicate raw
 payloads. Editable nutrition stays separate from the original provider response.
 This is a source archive, not a cache of inferred intake or aggregates.
 
-Backup schema 3 includes the archive and validates checksums, unique lookup IDs,
+Backup schemas 3 and 4 include the archive and validates checksums, unique lookup IDs,
 barcode/reference consistency and payload JSON before replacing data transactionally.
 Older backups without archive references still restore. The raw response limit is
 1 MiB per request and portable backup limit is 64 MiB; oversized data fails explicitly.
@@ -163,15 +217,15 @@ Future nutrient extraction can use archived fields without another API request.
 
 ## Accounting model
 
-SQLite `nutrition.db` schema version 3 stores authoritative JSON documents in a
+SQLite `nutrition.db` schema version 4 stores authoritative JSON documents in a
 structured records table with stable IDs and explicit kinds: food, batch, direct,
-settings and effective-dated expenditure rate. Calorie-only records store an instant
+settings, effective-dated legacy/resting rates, and extra activity. Calorie-only records store an instant
 and energy without fabricated nutrient values. Batch eating events carry stable IDs
 and timestamps, and are included in backups. System Back navigates through prior screens, retaining in-memory inputs and scroll
 position. Saving returns to the parent screen and clears intermediate entry screens;
 only Back from home exits. A cooking draft is restored after activity recreation.
 
-SQLiteOpenHelper migrates older databases by adding the kind index and separate raw-lookup table without changing recorded facts;
+SQLiteOpenHelper migrates older databases by adding the kind index, raw-lookup table and step cache without changing food facts;
 unsupported future migrations fail rather than discarding data. The prototype's
 separate `audit.db` is not imported or changed. No audit logs or images are collected.
 
@@ -193,22 +247,20 @@ No inferred consumption, meals, allocations, or aggregate caches are persisted.
 Calendar views use epoch-millisecond facts and the device timezone, including DST.
 Changing the device timezone changes calendar views, not recorded instants.
 
-Daily expenditure accrues by elapsed fraction of the local calendar day, including
+Resting expenditure accrues by elapsed fraction of the local calendar day, including
 23/25-hour days. Effective-date rates preserve earlier assumptions. Nothing accrues
-before tracking start. Full-week target sums effective daily rates for seven days
-minus the weekly goal; with a constant rate this is `7 × rate − goal`. Future rate
-assumptions carry forward until another effective date. Current-week balance is only
-week-to-date, never an achieved full-week goal.
+before tracking start. See Expenditure above for the component calculation and legacy
+boundary. Current-week balance is only week-to-date, never an achieved full-week goal.
 
 ## Backup and privacy
 
-**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 3
-(restore also accepts schemas 1 and 2) and
+**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 4
+(restore also accepts schemas 1, 2 and 3) and
 authoritative records/settings using Android's document picker. **Restore** validates
 types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
 replacement. It replaces ALL tracker data after confirmation; it does not merge.
 Repeated restoration cannot duplicate records. Export first to preserve current data.
-Keep backups private: they contain food history and settings. No signing keys or
+Keep backups private: they contain food/activity history, saved step totals and settings. No signing keys or
 personal backups belong in Git.
 
 No analytics, photos, remote uploads or accounts. Only explicitly requested barcode
@@ -217,7 +269,7 @@ under ODbL; see https://world.openfoodfacts.org/data. Missing values never becom
 
 ## Build here
 
-The ignored `.android-toolchain/` contains Temurin JDK 17, Android SDK platform 35,
+The ignored `.android-toolchain/` contains Temurin JDK 17, Android SDK platform 36,
 build tools 35.0.0, command-line tools and Gradle's cache. Run:
 
 ```sh
@@ -227,7 +279,7 @@ build tools 35.0.0, command-line tools and Gradle's cache. Run:
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`. Debug signing is generated locally;
-no keys are committed. Java 17, Kotlin 2.0.21, Gradle 8.9, AGP 8.7.3, Compose Material 3, CameraX,
+no keys are committed. Java 17, Kotlin 2.0.21, Gradle 8.11.1, AGP 8.10.1, Compose Material 3, CameraX,
 bundled ML Kit barcode scanner. No OCR dependency.
 
 For another Linux x86_64 machine, install a JDK 17 at `.android-toolchain/jdk` and
@@ -236,7 +288,7 @@ Google Android command-line tools at `.android-toolchain/sdk/cmdline-tools/lates
 ```sh
 source scripts/android-env.sh
 sdkmanager --sdk_root="$ANDROID_HOME" --licenses
-sdkmanager --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
+sdkmanager --sdk_root="$ANDROID_HOME" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0'
 printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
 ./scripts/build-android.sh
 ```

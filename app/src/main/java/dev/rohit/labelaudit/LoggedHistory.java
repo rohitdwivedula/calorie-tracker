@@ -13,18 +13,24 @@ public final class LoggedHistory {
     public final LocalDate date;
     public final Nutrients.Total nutrition;
     public final double expenditure, allocatedKcal;
+    public final boolean incomplete;
 
-    Day(LocalDate date, Nutrients.Total nutrition, double expenditure, double allocatedKcal) {
+    Day(
+        LocalDate date,
+        Nutrients.Total nutrition,
+        DailyExpenditure.Estimate expenditure,
+        double allocatedKcal) {
       this.date = date;
       this.nutrition = nutrition;
-      this.expenditure = expenditure;
+      this.expenditure = expenditure.total;
+      this.incomplete = expenditure.incomplete();
       this.allocatedKcal = allocatedKcal;
     }
   }
 
   public static final class Summary {
     public final Nutrients.Total nutrition = new Nutrients.Total();
-    public int loggedDays;
+    public int loggedDays, incompleteDays;
     public double expenditure, allocatedKcal;
 
     public double deficit() {
@@ -72,7 +78,7 @@ public final class LoggedHistory {
           new Day(
               date,
               repo.nutrientTotals(from, to, asOf),
-              repo.expenditure(from, to),
+              repo.dailyExpenditure(date, asOf),
               allocatedKcal));
     }
   }
@@ -87,6 +93,7 @@ public final class LoggedHistory {
     if (!from.isBefore(until)) return result;
     for (Day day : days.subMap(from, true, until, false).values()) {
       result.loggedDays++;
+      if (day.incomplete) result.incompleteDays++;
       result.expenditure += day.expenditure;
       result.allocatedKcal += day.allocatedKcal;
       for (int i = 0; i < Nutrients.KEYS.length; i++) {

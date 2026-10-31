@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter
 import org.json.*
 
 @Composable
-fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
+fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit) {
     val r = v.repo
     val revision = v.revision
     val now = remember(revision) { System.currentTimeMillis() }
@@ -68,6 +68,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
                         )
                 }
             }
+            ExpenditureBreakdown(v, today, connectSteps, compact = true, asOf = now)
             if (totals.missing[1] || totals.missing[4])
                 Text(
                     "Some nutrients are unknown · ≥ is a known minimum",
@@ -82,7 +83,9 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
                         "Today's ${if(daily>=0)"deficit" else "surplus"}",
                         if (dailySummary.loggedDays == 0) "—"
                         else "${kcal(kotlin.math.abs(daily))} kcal",
-                        if (dailySummary.loggedDays == 0) "No intake logged" else "Estimated so far",
+                        if (dailySummary.loggedDays == 0) "No intake logged"
+                        else
+                            "Estimated so far${if(dailySummary.incompleteDays > 0) " · incomplete" else ""}",
                     )
                 }
             }
@@ -92,7 +95,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
                         "Weekly ${if(weekly>=0)"deficit" else "surplus"}",
                         if (weeklySummary.loggedDays == 0) "—"
                         else "${kcal(kotlin.math.abs(weekly))} kcal",
-                        "Est. · ${weeklySummary.loggedDays}/7 days logged",
+                        "Est. · ${weeklySummary.loggedDays}/7 days logged${if(weeklySummary.incompleteDays > 0) " · incomplete" else ""}",
                     )
                 }
             }

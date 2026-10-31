@@ -9,7 +9,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import java.time.*
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -18,6 +21,84 @@ import org.json.JSONObject
 class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     AndroidViewModel(app) {
     val repo = TrackerRepository(app)
+    private val stepsSync = StepsSync(repo, AndroidStepSource(app))
+    private var stepsJob: Job? = null
+    private val pendingStepDates = linkedSetOf<LocalDate>()
+    var syncingSteps by mutableStateOf(false)
+        private set
+
+    var stepAccess by mutableStateOf("unknown")
+        private set
+
+    fun refreshSteps(date: LocalDate? = null) {
+        val today = LocalDate.now(repo.zone)
+        val start =
+            maxOf(
+                LocalDate.parse(repo.settings.getString("start")),
+                LocalDate.parse(repo.settings.getString("energyStart")),
+            )
+        if (date != null && date >= start && date <= today) pendingStepDates.add(date)
+        if (date == null)
+            (0L..30L)
+                .map { today.minusDays(it) }
+                .filter { it >= start }
+                .forEach { pendingStepDates.add(it) }
+        if (stepsJob?.isActive == true || pendingStepDates.isEmpty()) return
+        syncingSteps = true
+        stepsJob =
+            viewModelScope.launch {
+                try {
+                    while (pendingStepDates.isNotEmpty()) {
+                        val dates = pendingStepDates.toList()
+                        pendingStepDates.clear()
+                        stepAccess = withContext(Dispatchers.IO) { stepsSync.refresh(dates) }
+                        refresh()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    stepAccess = "error"
+                    message = "Couldn't refresh steps; saved values kept"
+                } finally {
+                    syncingSteps = false
+                }
+            }
+    }
+
+    fun openEnergy(date: LocalDate = LocalDate.now(repo.zone)) {
+        clearForm("energy")
+        field("energy", "date", date.toString(), true)
+        go("energy")
+        refreshSteps(date)
+    }
+
+    fun beginActivity(date: LocalDate, existing: JSONObject? = null) {
+        clearForm("activity")
+        field("activity", "id", existing?.getString("id") ?: UUID.randomUUID().toString(), true)
+        field("activity", "date", existing?.getString("date") ?: date.toString(), true)
+        field("activity", "kcal", existing?.getDouble("kcal")?.let(::fmt) ?: "", true)
+        field("activity", "description", existing?.optString("description") ?: "", true)
+        go("activity")
+    }
+
+    fun saveActivity() {
+        val date = LocalDate.parse(field("activity", "date"))
+        require(date <= LocalDate.now(repo.zone)) { "Activity date cannot be in the future" }
+        require(date >= LocalDate.parse(repo.settings.getString("energyStart"))) {
+            "Activity must be on or after the new model's start date"
+        }
+        repo.db.save(
+            "activity",
+            JSONObject()
+                .put("id", field("activity", "id"))
+                .put("date", date.toString())
+                .put("kcal", field("activity", "kcal").toDouble())
+                .put("description", field("activity", "description")),
+        )
+        back()
+        refresh()
+    }
+
     private val history =
         Navigation<String>().apply {
             restore(saved.get<ArrayList<String>>("backstack") ?: arrayListOf()) { it }
@@ -336,9 +417,13 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     }
 
     fun delete() {
+        val kind = deleteRecord?.first
         deleteRecord?.let { repo.db.delete(record(it.first, it.second)) }
         deleteRecord = null
-        home()
+        if (kind == "activity") {
+            back()
+            refresh()
+        } else home()
     }
 
     fun updateEvent(id: String, index: Int, fraction: Double, time: Long, remove: Boolean) {
@@ -389,7 +474,10 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         require(!start.isAfter(LocalDate.now(repo.zone))) {
             "Tracking start cannot be in the future"
         }
-        require(goal < 7 * rate) { "Goal must leave a positive intake target" }
+        require(repo.db.list("rate").any { it.getString("date") <= start.toString() }) {
+            "Tracking start must be covered by a recorded expenditure rate"
+        }
+        require(goal < 7 * rate) { "Goal must leave a positive resting-only intake target" }
         val s =
             JSONObject(repo.settings.toString())
                 .put("start", start.toString())
@@ -398,25 +486,22 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
                 .put("goal", goal)
         val r =
             JSONObject()
-                .put("id", "rate-$effective")
+                .put("id", UUID.randomUUID().toString())
                 .put("date", effective.toString())
                 .put("value", rate)
         Data.validate("settings", s)
-        Data.validate("rate", r)
-        require(
-            !effective.isAfter(start) ||
-                repo.db.list("rate").any { it.getString("date") <= start.toString() }
-        ) {
-            "An expenditure rate must cover tracking start"
+        Data.validate("resting", r)
+        require(effective >= LocalDate.parse(repo.settings.getString("energyStart"))) {
+            "Resting changes start on or after ${repo.settings.getString("energyStart")}; earlier dates retain legacy expenditure"
         }
         val db = repo.db.writableDatabase
         db.beginTransaction()
         try {
             repo.db
-                .list("rate")
+                .list("resting")
                 .filter { it.getString("date") == effective.toString() }
                 .forEach { repo.db.delete(it) }
-            repo.db.save("rate", r)
+            repo.db.save("resting", r)
             repo.db.save("settings", s)
             db.setTransactionSuccessful()
         } finally {
@@ -486,8 +571,11 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         busy = true
         viewModelScope.launch {
             try {
+                stepsJob?.cancelAndJoin()
+                pendingStepDates.clear()
                 withContext(Dispatchers.IO) { repo.db.restore(text) }
                 home()
+                refreshSteps()
                 message = "Backup restored"
             } catch (e: Exception) {
                 error = e.message

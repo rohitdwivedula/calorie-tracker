@@ -1,14 +1,14 @@
 plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android'; id 'org.jetbrains.kotlin.plugin.compose' }
 android {
     namespace 'dev.rohit.labelaudit'
-    compileSdk 35
+    compileSdk 36
     buildToolsVersion "35.0.0"
     defaultConfig {
         applicationId 'dev.rohit.labelaudit'
         minSdk 26
         targetSdk 34
-        versionCode 11
-        versionName '1.0.9'
+        versionCode 12
+        versionName '1.0.10'
         ndk { abiFilters 'arm64-v8a' }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -24,6 +24,9 @@ android {
     packaging { jniLibs { useLegacyPackaging true } }
 }
 dependencies {
+    implementation 'androidx.health.connect:connect-client:1.1.0'
+    // CameraX exposes ListenableFuture; Health Connect's runtime Guava replaces its tiny stub.
+    implementation 'com.google.guava:guava:31.1-android'
     implementation platform('androidx.compose:compose-bom:2024.12.01')
     implementation 'androidx.activity:activity-compose:1.9.3'
     implementation 'androidx.compose.ui:ui'

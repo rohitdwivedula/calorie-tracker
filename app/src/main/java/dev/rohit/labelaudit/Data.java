@@ -9,13 +9,14 @@ import org.json.*;
 /** Versioned recorded facts and separate raw provider responses; estimates are never persisted. */
 public final class Data extends SQLiteOpenHelper {
   public Data(Context c) {
-    super(c, "nutrition.db", null, 3);
+    super(c, "nutrition.db", null, 4);
   }
 
   public void onCreate(SQLiteDatabase d) {
     d.execSQL("CREATE TABLE records(id TEXT PRIMARY KEY, kind TEXT NOT NULL, body TEXT NOT NULL)");
     d.execSQL("CREATE INDEX records_kind ON records(kind)");
     createLookups(d);
+    createSteps(d);
   }
 
   private static void createLookups(SQLiteDatabase d) {
@@ -24,10 +25,75 @@ public final class Data extends SQLiteOpenHelper {
             + " NULL, url TEXT NOT NULL, payload TEXT NOT NULL, sha256 TEXT NOT NULL)");
   }
 
+  private static void createSteps(SQLiteDatabase d) {
+    d.execSQL(
+        "CREATE TABLE step_cache(day TEXT NOT NULL, zone TEXT NOT NULL, body TEXT NOT NULL, PRIMARY"
+            + " KEY(day,zone))");
+  }
+
+  public JSONObject stepCache(String day, String zone) {
+    try (Cursor c =
+        getReadableDatabase()
+            .rawQuery(
+                "SELECT body FROM step_cache WHERE day=? AND zone=?", new String[] {day, zone})) {
+      return c.moveToFirst() ? new JSONObject(c.getString(0)) : new JSONObject();
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public void saveStepCache(String day, String zone, JSONObject value) {
+    ContentValues v = new ContentValues();
+    v.put("day", day);
+    v.put("zone", zone);
+    v.put("body", value.toString());
+    getWritableDatabase()
+        .insertWithOnConflict("step_cache", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+  }
+
+  private JSONArray stepArchive() throws Exception {
+    JSONArray result = new JSONArray();
+    try (Cursor c =
+        getReadableDatabase()
+            .rawQuery(
+                "SELECT day,zone,body FROM step_cache WHERE day <> '_connection' ORDER BY day,zone",
+                null)) {
+      while (c.moveToNext()) {
+        JSONObject body = new JSONObject(c.getString(2));
+        if (body.has("steps"))
+          result.put(
+              new JSONObject()
+                  .put("date", c.getString(0))
+                  .put("zone", c.getString(1))
+                  .put("data", body));
+      }
+    }
+    return result;
+  }
+
+  private static void validateStepArchive(JSONArray rows) throws Exception {
+    Set<String> keys = new HashSet<>();
+    for (int i = 0; i < rows.length(); i++) {
+      JSONObject row = rows.getJSONObject(i), data = row.getJSONObject("data");
+      java.time.LocalDate date = java.time.LocalDate.parse(row.getString("date"));
+      java.time.ZoneId zone = java.time.ZoneId.of(row.getString("zone"));
+      if (!keys.add(date + ":" + zone)) throw new Exception("Duplicate step date and zone");
+      number(data, "steps", 0, 1000000);
+      if (data.getDouble("steps") != data.getLong("steps"))
+        throw new Exception("Steps must be an integer");
+      number(data, "synced", 0, 32503680000000d);
+      number(data, "attempted", data.getLong("synced"), 32503680000000d);
+      long from = date.atStartOfDay(zone).toInstant().toEpochMilli();
+      long to = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+      number(data, "through", from, Math.min(to, data.getLong("synced")));
+    }
+  }
+
   public void onUpgrade(SQLiteDatabase d, int a, int b) {
-    if (a < 1 || b != 3) throw new IllegalStateException("Unsupported migration " + a + " to " + b);
+    if (a < 1 || b != 4) throw new IllegalStateException("Unsupported migration " + a + " to " + b);
     if (a < 2) d.execSQL("CREATE INDEX IF NOT EXISTS records_kind ON records(kind)");
     if (a < 3) createLookups(d);
+    if (a < 4) createSteps(d);
   }
 
   public static final int MAX_LOOKUP_BYTES = 1024 * 1024, MAX_BACKUP_BYTES = 64 * 1024 * 1024;
@@ -225,6 +291,7 @@ public final class Data extends SQLiteOpenHelper {
     } else if (kind.equals("settings")) {
       java.time.LocalDate.parse(j.getString("start"));
       number(j, "duration", 1, 720);
+      if (j.has("energyStart")) java.time.LocalDate.parse(j.getString("energyStart"));
       if (j.has("nutrientGoals")) {
         JSONObject goals = j.getJSONObject("nutrientGoals");
         for (int i = 1; i < Nutrients.KEYS.length; i++)
@@ -235,18 +302,28 @@ public final class Data extends SQLiteOpenHelper {
       number(j, "goal", 0, 70000);
       if (!Estimator.POLICY.equals(j.getString("policy")))
         throw new Exception("Unsupported policy");
-    } else if (kind.equals("rate")) {
+    } else if (kind.equals("activity")) {
+      java.time.LocalDate.parse(j.getString("date"));
+      number(j, "kcal", 0.001, 100000);
+      if (j.optString("description").length() > 1000) throw new Exception("Description too long");
+    } else if (kind.equals("rate") || kind.equals("resting")) {
       java.time.LocalDate.parse(j.getString("date"));
       number(j, "value", 1, 10000);
     } else throw new Exception("Unknown record type");
   }
 
   public String backup() throws Exception {
-    JSONObject root = new JSONObject().put("schema", 3);
+    JSONObject root = new JSONObject().put("schema", 4);
     JSONArray rows = new JSONArray();
-    for (String k : new String[] {"food", "batch", "direct", "calorie", "settings", "rate"})
-      for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
-    String result = root.put("records", rows).put("lookups", lookupArchive()).toString(2);
+    for (String k :
+        new String[] {
+          "food", "batch", "direct", "calorie", "settings", "rate", "resting", "activity"
+        }) for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
+    String result =
+        root.put("records", rows)
+            .put("lookups", lookupArchive())
+            .put("cachedSteps", stepArchive())
+            .toString(2);
     if (result.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_BACKUP_BYTES)
       throw new Exception("Backup exceeds 64 MB limit");
     return result;
@@ -254,30 +331,35 @@ public final class Data extends SQLiteOpenHelper {
 
   public void restore(String text) throws Exception {
     JSONObject root = new JSONObject(text);
-    if (root.getInt("schema") < 1 || root.getInt("schema") > 3)
+    if (root.getInt("schema") < 1 || root.getInt("schema") > 4)
       throw new Exception("Unsupported schema");
     JSONArray rows = root.getJSONArray("records");
     JSONArray lookups = root.has("lookups") ? root.getJSONArray("lookups") : new JSONArray();
+    JSONArray steps = root.has("cachedSteps") ? root.getJSONArray("cachedSteps") : new JSONArray();
+    validateStepArchive(steps);
     validateLookupReferences(rows, lookups);
     Set<String> ids = new HashSet<>();
     int settings = 0;
-    Set<String> dates = new HashSet<>();
+    Set<String> dates = new HashSet<>(), restingDates = new HashSet<>();
     for (int i = 0; i < rows.length(); i++) {
       JSONObject r = rows.getJSONObject(i), j = r.getJSONObject("data");
       String k = r.getString("kind");
       validate(k, j);
       if (!ids.add(j.getString("id"))) throw new Exception("Duplicate ID");
       if (k.equals("settings")) settings++;
+      if (k.equals("resting") && !restingDates.add(j.getString("date")))
+        throw new Exception("Duplicate resting date");
       if (k.equals("rate") && !dates.add(j.getString("date")))
         throw new Exception("Duplicate expenditure date");
     }
     if (settings != 1 || dates.isEmpty()) throw new Exception("Settings and expenditure required");
-    String tracking = "";
+    String tracking = "", energyStart = "";
     double goal = 0;
     for (int i = 0; i < rows.length(); i++) {
       JSONObject r = rows.getJSONObject(i);
       if (r.getString("kind").equals("settings")) {
         tracking = r.getJSONObject("data").getString("start");
+        energyStart = r.getJSONObject("data").optString("energyStart", "");
         goal = r.getJSONObject("data").getDouble("goal");
       }
     }
@@ -290,11 +372,23 @@ public final class Data extends SQLiteOpenHelper {
       }
     }
     if (!covered) throw new Exception("Expenditure must cover tracking start");
+    if (!energyStart.isEmpty()) {
+      final String boundary = energyStart;
+      if (restingDates.stream().noneMatch(d -> d.compareTo(boundary) <= 0))
+        throw new Exception("Resting rate must cover expenditure model start");
+    }
     SQLiteDatabase d = getWritableDatabase();
     d.beginTransaction();
     try {
       d.delete("records", null, null);
       d.delete("lookups", null, null);
+      d.delete("step_cache", null, null);
+      for (int i = 0; i < steps.length(); i++) {
+        JSONObject row = steps.getJSONObject(i), body = row.getJSONObject("data");
+        // Keep measured inputs across reinstalls/history-read limits, but recheck connection/data.
+        body.put("status", "restored");
+        saveStepCache(row.getString("date"), row.getString("zone"), body);
+      }
       for (int i = 0; i < lookups.length(); i++) insertLookup(lookups.getJSONObject(i));
       for (int i = 0; i < rows.length(); i++) {
         JSONObject r = rows.getJSONObject(i);

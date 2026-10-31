@@ -7,6 +7,7 @@ package dev.rohit.labelaudit
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +23,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,8 +35,37 @@ private val MainRoutes = listOf("Today", "history", "stats", "foods")
 
 @Composable
 fun TrackerApp(v: TrackerViewModel = viewModel()) {
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { v.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        v.refresh()
+        v.refreshSteps()
+    }
     val context = LocalContext.current
+    val healthPermission =
+        rememberLauncherForActivityResult(
+            PermissionController.createRequestPermissionResultContract()
+        ) {
+            v.refreshSteps()
+        }
+    fun connectSteps() {
+        v.run {
+            when (HealthConnectClient.getSdkStatus(context)) {
+                HealthConnectClient.SDK_AVAILABLE ->
+                    healthPermission.launch(setOf(AndroidStepSource.READ_STEPS))
+                HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(
+                                "https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata"
+                            ),
+                        )
+                    )
+                else ->
+                    v.message =
+                        "Health Connect is unavailable on this device. Food logging still works."
+            }
+        }
+    }
     val resolver = context.contentResolver
     var manualBarcode by rememberSaveable { mutableStateOf(false) }
     var barcode by rememberSaveable { mutableStateOf("") }
@@ -81,6 +113,8 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "food-edit" -> "Food nutrition"
             "settings" -> "Settings"
             "summary" -> "Energy balance"
+            "energy" -> "Expenditure"
+            "activity" -> "Activity calories"
             "details" -> "Dish details"
             "calories" -> "Quick log"
             else -> "Nutrition"
@@ -141,7 +175,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             holder.SaveableStateProvider(v.route) {
                 when (v.route) {
-                    "Today" -> TodayScreen(v, { scan(false) })
+                    "Today" -> TodayScreen(v, { scan(false) }, ::connectSteps)
                     "cook" -> CookScreen(v, { scan(true) })
                     "foods" ->
                         FoodsScreen(
@@ -171,6 +205,8 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                             },
                         )
                     "summary" -> SummaryScreen(v)
+                    "energy" -> ExpenditureScreen(v, ::connectSteps)
+                    "activity" -> ActivityCaloriesScreen(v)
                     "details" -> DetailsScreen(v)
                     "calories" -> CaloriesScreen(v)
                 }
@@ -243,7 +279,13 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         AlertDialog(
             onDismissRequest = { v.deleteRecord = null },
             title = { Text("Delete this record?") },
-            text = { Text("Its recorded intake will also be removed.") },
+            text = {
+                Text(
+                    if (v.deleteRecord?.first == "activity")
+                        "Its extra expenditure will be removed."
+                    else "Its recorded intake will also be removed."
+                )
+            },
             confirmButton = { TextButton(onClick = { v.run { v.delete() } }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { v.deleteRecord = null }) { Text("Cancel") } },
         )

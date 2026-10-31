@@ -28,7 +28,14 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
     val week = v.field("settings", "week", s.getInt("week").toString()).toInt()
     Page {
         Section("Energy assumptions") {
-            FormField(v, "settings", "daily", "Daily expenditure (kcal)", fmt(r.rate(today)), true)
+            FormField(
+                v,
+                "settings",
+                "daily",
+                "Resting metabolic rate (kcal/day)",
+                fmt(r.restingRate(today)),
+                true,
+            )
             FormField(
                 v,
                 "settings",
@@ -64,15 +71,34 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                "Resting accrues through the day. Digestion, steps and extra activity are added separately.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { v.openEnergy() }) { Text("Steps & activity") }
             TextButton(onClick = { advanced = !advanced }) {
                 Text("Expenditure history & advanced")
             }
             if (advanced) {
                 r.db
-                    .list("rate")
+                    .list("resting")
                     .sortedByDescending { it.getString("date") }
                     .forEach {
                         InfoRow(it.getString("date"), "${fmt(it.getDouble("value"))} kcal/day")
+                    }
+                Text(
+                    "New model since ${s.getString("energyStart")}. Earlier dates keep the previous total-expenditure assumptions.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                r.db
+                    .list("rate")
+                    .sortedByDescending { it.getString("date") }
+                    .forEach {
+                        InfoRow(
+                            "Legacy · ${it.getString("date")}",
+                            "${fmt(it.getDouble("value"))} kcal/day",
+                        )
                     }
                 FormField(
                     v,
@@ -89,7 +115,7 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
                         v.saveSettings(
                             LocalDate.parse(v.field("settings", "start", s.getString("start"))),
                             LocalDate.parse(v.field("settings", "effective", today.toString())),
-                            v.field("settings", "daily", fmt(r.rate(today))).toDouble(),
+                            v.field("settings", "daily", fmt(r.restingRate(today))).toDouble(),
                             v.field("settings", "goal", fmt(s.getDouble("goal"))).toDouble(),
                             week,
                             v.field("settings", "duration", fmt(s.getDouble("duration"))).toDouble(),
@@ -113,7 +139,7 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
                 Text("Restore backup")
             }
             Text(
-                "Backups include food snapshots, portions, settings and full lookup responses.",
+                "Backups include foods, portions, activities, resting rates, saved step totals and lookup responses.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -7,6 +7,8 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 - [Portion entry](compose-portion.png)
 - [Calorie log date/time](compose-calorie-time.png)
 - [Daily balance](compose-balance-days.png)
+- [Expenditure breakdown](compose-expenditure.png)
+- [Add activity calories](compose-activity-calories.png)
 - [Weekly balance](compose-balance-weeks.png)
 - [Monthly balance](compose-balance-months.png)
 - [Dish portion and ingredients](compose-dish-portion-details.png)
