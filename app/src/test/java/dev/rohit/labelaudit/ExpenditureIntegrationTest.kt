@@ -133,29 +133,6 @@ class ExpenditureIntegrationTest {
     }
 
     @Test
-    fun queryComparisonReportsProviderResponsesWithoutScalingOrChangingCache() = runBlocking {
-        val current = day.plusDays(1)
-        val now = time(current, 14)
-        val dayEnd = Instant.ofEpochMilli(r.midnight(current.plusDays(1)))
-        val calls = mutableListOf<Pair<Instant, Instant>>()
-        val source =
-            object : StepSource {
-                override suspend fun access() = "ok"
-
-                override suspend fun aggregate(from: Instant, until: Instant): Long {
-                    calls.add(from to until)
-                    return if (until == dayEnd) 8000 else 4000
-                }
-            }
-        val result = compareStepQueries(source, current, r.zone, now)
-        assertEquals(4000L, result.untilNow)
-        assertEquals(8000L, result.wholeDay)
-        assertEquals(Instant.ofEpochMilli(now), calls.first().second)
-        assertEquals(dayEnd, calls.last().second)
-        assertEquals(0, r.db.stepCache(current.toString(), r.zone.id).length())
-    }
-
-    @Test
     fun errorsAndRevocationPreserveLastSuccessAndFoodStillWorks() = runBlocking {
         val source = FakeSource()
         val sync = StepsSync(r, source)

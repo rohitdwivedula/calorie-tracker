@@ -21,31 +21,7 @@ import org.json.JSONObject
 class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     AndroidViewModel(app) {
     val repo = TrackerRepository(app)
-    private val stepSource = AndroidStepSource(app)
-    private val stepsSync = StepsSync(repo, stepSource)
-    var stepComparison by mutableStateOf<StepQueryComparison?>(null)
-    var comparingSteps by mutableStateOf(false)
-        private set
-
-    fun compareSteps(date: LocalDate) {
-        if (comparingSteps) return
-        comparingSteps = true
-        viewModelScope.launch {
-            try {
-                stepComparison =
-                    withContext(Dispatchers.IO) {
-                        compareStepQueries(stepSource, date, repo.zone, System.currentTimeMillis())
-                    }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                error = e.message ?: "Couldn't compare step queries"
-            } finally {
-                comparingSteps = false
-            }
-        }
-    }
-
+    private val stepsSync = StepsSync(repo, AndroidStepSource(app))
     private var stepsJob: Job? = null
     private val pendingStepDates = linkedSetOf<LocalDate>()
     var syncingSteps by mutableStateOf(false)

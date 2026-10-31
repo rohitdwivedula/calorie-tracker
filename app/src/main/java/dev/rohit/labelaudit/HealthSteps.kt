@@ -133,28 +133,3 @@ class StepsSync(private val repo: TrackerRepository, private val source: StepSou
         return access
     }
 }
-
-/** Opt-in diagnostic: compare raw aggregate responses, without changing the expenditure cache. */
-data class StepQueryComparison(
-    val date: LocalDate,
-    val zone: ZoneId,
-    val checkedAt: Instant,
-    val untilNow: Long?,
-    val wholeDay: Long?,
-)
-
-suspend fun compareStepQueries(
-    source: StepSource,
-    date: LocalDate,
-    zone: ZoneId,
-    now: Long,
-): StepQueryComparison {
-    check(source.access() == "ok") { "Connect Health Connect steps first" }
-    val from = date.atStartOfDay(zone).toInstant()
-    val end = date.plusDays(1).atStartOfDay(zone).toInstant()
-    val checked = Instant.ofEpochMilli(now)
-    require(checked >= from) { "Choose today or an earlier date" }
-    val partial = source.aggregate(from, minOf(end, checked))
-    val full = source.aggregate(from, end)
-    return StepQueryComparison(date, zone, checked, partial, full)
-}

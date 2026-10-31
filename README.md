@@ -121,15 +121,11 @@ installed. Samsung Health/watch data reaches the app only through Health Connect
 
 Launch/resume refreshes today and up to 30 recent dates since the new model began;
 viewing a date and Refresh steps also requery that date. Queries cover the whole local
-calendar day, including today, to match the daily Health Connect view. This avoids
-querying only part of a day-spanning provider interval. A clipped-interval aggregate
-is one possible cause of mismatches; it has not been confirmed on the user's device.
-Only resting expenditure is scaled by elapsed time; step totals are used directly.
-The observation timestamp is still bounded to the check time. Existing clipped
-current-day caches are marked stale until refreshed. The daily detail screen has an
-opt-in Compare step queries action showing the actual midnight-to-now and whole-day
-aggregate responses; these diagnostic reads don't alter saved totals. Last checked
-means this app read Health Connect, not that the upstream watch just synced.
+calendar day, including today, to match the daily Health Connect view. Only resting
+expenditure is scaled by elapsed time; step totals are used directly. The observation
+timestamp is still bounded to the check time. Existing clipped current-day caches
+are marked stale until refreshed. Last checked means this app read Health Connect,
+not that the upstream watch just synced.
 Each local date/time-zone key
 is replaced, not incremented. Cache entries retain the last successful count, sync time,
 observed-through instant, query end and latest attempt/status. A successful measured zero is

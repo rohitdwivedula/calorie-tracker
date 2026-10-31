@@ -1,46 +1,23 @@
-Pending local update — app 1.0.11, versionCode 13
+Pending local update — app 1.0.12, versionCode 14
 User approval required before push/release publication.
 
 Changes:
-- Optimized release APK: R8 code optimization, unused code/resource shrinking, no
-  debug preview tooling and android:debuggable=false. Developer debug build retained.
-- Reuse existing locally generated debug signing identity for personal sideload updates.
-  No keystore path, credentials or key material added to source control.
-- New scripts/build-installable.sh builds optimized APK, tests and release lint.
-- Steps now use whole-local-day aggregate windows (including today), matching calendar
-  day boundaries instead of clipping today's interval at now. No raw-step sums,
-  origin filter, source max, manual correction factor or elapsed-time scaling added.
-- Resting expenditure still accrues through the same as-of instant as food intake.
-- Last checked replaces Last synced: read time does not prove upstream watch sync.
-- Opt-in daily-detail comparison displays direct Health Connect midnight-to-now and
-  whole-day aggregate responses; it never changes cached totals or expenditure.
-- Cache metadata records the query end separately from observed-through/check time.
-  Old clipped current-day cache flagged stale until refreshed. Backup schema unchanged.
-
-Steps diagnosis limits:
-- Day-interval prorating is a hypothesis, not a confirmed device/platform diagnosis.
-- Synthetic regression models a day-spanning interval to ensure the query covers its
-  full local day. Independent comparison test verifies raw counts are shown unchanged.
-- Actual counts/source timestamps and both aggregate results must be checked on-device.
-  No source aggregation workaround or invented extra steps are persisted.
+- Remove the temporary Compare step queries button, dialog, ViewModel state/coroutine,
+  comparison-only Health Connect reads, tests and obsolete synthetic preview.
+- Keep whole-local-day aggregate steps, unchanged resting accrual, normal refresh,
+  source-priority deduplication and missing/stale cache handling.
+- Keep the regression that verifies steps are not prorated by elapsed day fraction.
+- No recorded food/activity facts, settings, database or backup schema changes.
+- Optimized, non-debuggable sideload build retains existing local signing configuration.
 
 Validation:
-- assembleRelease, assembleDebug, testDebugUnitTest, lintDebug, lintRelease passed.
-- 106 automated tests; zero failures/errors/skips. Existing food and expenditure tests pass.
-- New checks: whole-day steps versus elapsed resting, direct aggregate comparison,
-  unchanged cache during diagnostics, comparison UI; local-day/DST checks retained.
-- Optimized APK signature and 16 KB zip alignment passed. Same signing certificate as
-  the existing debug signing configuration. Manifest is non-debuggable.
-- Inspected minified DEX: reflective Application/SavedStateHandle ViewModel constructor
-  retained. Exported app/privacy activity identities retained. No broad keep rules added.
-- No physical-device test of minified app/camera/Health Connect performed here.
-- No signing keys, private databases, backups, real user screenshots or health data committed.
+- assembleRelease, testDebugUnitTest, lintDebug and lintRelease passed.
+- 104 tests passed; zero failures/errors/skips. Two tests for the removed diagnostic
+  were deleted; whole-day query, local-day/DST and normal expenditure UI tests retained.
+- APK signature and 16 KB zip alignment verified.
+- No keys, personal databases/exports or real health-data screenshots committed.
 
-Previous published APK bytes: 25637072
-Optimized APK bytes: 6143749
-Size reduction: 76.0%
 APK: app/build/outputs/apk/release/app-release.apk
-SHA256: 0e3cd731a2fb66d82545d3d5e127715997c49b156f921c77c68fd2ca5257b48f
-
-Review: docs/screenshots/compose-step-query-comparison.png (synthetic counts).
-No release published for this pending update.
+Bytes: 6141521
+SHA256: a1e2692595fffabd5080f5c72d07192082b0b8dc848fb3767d2bfb3fc339dcce
+No release published for this pending cleanup.
