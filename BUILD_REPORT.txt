@@ -8,7 +8,9 @@ Changes:
   in ExpenditureCoefficients.java, documented with Westerterp (2004) reference.
 - Resting accrues by elapsed local-day fraction, including DST, matching intake as-of.
 - Expandable home breakdown, dated daily details and activity add/edit/delete flow.
-- Missing macro data and missing/stale steps explicitly flag incomplete estimates.
+- Calorie-only logs use a labeled 8% digestion fallback instead of macro TEF. Nutrition
+  macros remain unknown. Known-macro foods keep their macro TEF despite calorie rounding.
+- Unresolved missing macros and missing/stale steps flag incomplete estimates.
 - Health Connect READ_STEPS only, aggregate COUNT_TOTAL with no origin filter.
   No raw-step sums/writes, exercise-energy imports, counter or background permission.
 - Launch/resume requery recent dates; daily view/refresh action requery selected date.
@@ -23,11 +25,12 @@ Changes:
 
 Validation:
 - assembleDebug, testDebugUnitTest, lintDebug passed (offline after dependency setup).
-- 101 tests; zero failures/errors/skips. Prior food/navigation/accounting tests pass.
+- 103 tests; zero failures/errors/skips. Prior food/navigation/accounting tests pass.
 - Requested example: TEF 220.8, steps 180, expenditure 2,266.8 kcal verified exactly.
 - Tests cover accrued resting, DST boundaries, effective rates, missing/zero/stale steps,
   permission revocation, history restrictions, replacement refresh, partial-day coverage,
-  activity edits/deletion, food-edit TEF recalculation, schema 2/3 upgrade, old backup
+  activity edits/deletion, food-edit TEF recalculation, mixed macro/fallback TEF, quick-log
+  edits/backdating/deletion, schema 2/3 upgrade, old backup
   migration, step-snapshot restore validation and duplicate-free round trips.
 - Material UI test adds, edits and deletes activity; synthetic preview images rendered.
 - APK signature verification and 16 KB zip alignment passed.
@@ -36,7 +39,7 @@ Validation:
 - Signing keys, personal databases/exports and local tooling excluded from Git.
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 25636422
-SHA256: 982d61a761bb2c9acd650f78aa88b5d64f6a6f29657f730908ee493fda8f89b3
+Bytes: 25637072
+SHA256: 32eb3a3a57ab46949e4b3c5acf4fb43e136ec4175396ee1ae0bf5865cfb357e2
 Review: docs/screenshots/compose-expenditure.png and compose-activity-calories.png.
 No release published for this pending update.

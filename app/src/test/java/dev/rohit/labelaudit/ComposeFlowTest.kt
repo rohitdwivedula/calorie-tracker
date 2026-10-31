@@ -168,9 +168,19 @@ class ComposeFlowTest {
     fun expenditureActivityCanBeAddedEditedAndDeletedWithMaterialControls() {
         ui.runOnIdle {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.repo.db.save(
+                "calorie",
+                org.json
+                    .JSONObject()
+                    .put("id", "quick-tef")
+                    .put("time", System.currentTimeMillis() - 60000)
+                    .put("kcal", 1100),
+            )
+            v.refresh()
             v.openEnergy()
         }
         ui.onNodeWithText("Resting so far").assertIsDisplayed()
+        ui.onNodeWithText("Includes 88 kcal using 8% for calorie-only logs").assertIsDisplayed()
         ui.onNodeWithText("Add activity calories").performScrollTo().performClick()
         ui.onNodeWithText("Additional kcal").performTextInput("100")
         ui.onNodeWithText("Description (optional)").performTextInput("Lifting")

@@ -245,6 +245,63 @@ class ExpenditureIntegrationTest {
     }
 
     @Test
+    fun quickCaloriesUseEightPercentAndEditsMoveOrRemoveOnlyTheirFallback() {
+        val food =
+            JSONObject()
+                .put("id", "food")
+                .put("name", "Label rounding example")
+                .put("unit", "g")
+                .put("basis", 100)
+                .put("kcal", 15)
+                .put("protein", 4)
+                .put("carbs", 0)
+                .put("fat", 0)
+        val direct =
+            JSONObject()
+                .put("id", "direct")
+                .put("name", "Known macros")
+                .put("available", time(day, 9))
+                .put("completed", time(day, 9))
+                .put("share", 1)
+                .put(
+                    "ingredients",
+                    JSONArray().put(JSONObject().put("food", food).put("quantity", 100)),
+                )
+        r.db.save("direct", direct)
+        val quick = JSONObject().put("id", "quick").put("time", time(day, 10)).put("kcal", 1100)
+        r.db.save("calorie", quick)
+        val now = time(day, 12)
+        val first = r.dailyExpenditure(day, now)
+        assertEquals(88.0, first.fallbackDigestion, 1e-9)
+        assertEquals(92.0, first.digestion, 1e-9) // 4 from protein, 88 only from quick calories
+        assertFalse(first.nutritionIncomplete)
+        val intake = r.nutrientTotals(r.midnight(day), now, now)
+        assertEquals(1115.0, intake.values[0], 0.0)
+        assertEquals(4.0, intake.values[1], 0.0)
+        assertTrue(intake.missing[1]) // fallback never invents protein grams
+        r.db.save("calorie", quick.put("kcal", 2200))
+        assertEquals(180.0, r.dailyExpenditure(day, now).digestion, 1e-9)
+        r.db.save("calorie", quick.put("time", time(day.plusDays(1), 10)))
+        val later = time(day.plusDays(1), 12)
+        assertEquals(4.0, r.dailyExpenditure(day, later).digestion, 1e-9)
+        assertEquals(176.0, r.dailyExpenditure(day.plusDays(1), later).digestion, 1e-9)
+        r.db.delete(quick)
+        assertEquals(0.0, r.dailyExpenditure(day.plusDays(1), later).digestion, 0.0)
+        assertEquals(1, r.db.list("direct").size)
+        assertEquals(
+            15.0,
+            r.db
+                .list("direct")
+                .single()
+                .getJSONArray("ingredients")
+                .getJSONObject(0)
+                .getJSONObject("food")
+                .getDouble("kcal"),
+            0.0,
+        )
+    }
+
+    @Test
     fun versionThreeMigrationPreservesOldTotalRatesAndFood() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val oldDate = LocalDate.now(r.zone).minusDays(1)

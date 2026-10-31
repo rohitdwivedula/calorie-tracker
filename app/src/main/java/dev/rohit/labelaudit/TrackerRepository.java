@@ -137,6 +137,11 @@ public final class TrackerRepository {
   }
 
   public Nutrients.Total nutrientTotals(long from, long to, long now) throws Exception {
+    return nutrientTotals(from, to, now, true);
+  }
+
+  private Nutrients.Total nutrientTotals(long from, long to, long now, boolean includeCalorieOnly)
+      throws Exception {
     Nutrients.Total result = new Nutrients.Total();
     for (String kind : new String[] {"batch", "direct"})
       for (JSONObject batch : db.list(kind)) {
@@ -150,15 +155,16 @@ public final class TrackerRepository {
               fraction * item.getDouble("quantity") / food.getDouble("basis"));
         }
       }
-    for (JSONObject entry : db.list("calorie")) {
-      long t = entry.getLong("time");
-      if (t >= from && t < Math.min(to, now)) {
-        double[] n = new double[Nutrients.KEYS.length];
-        Arrays.fill(n, Double.NaN);
-        n[0] = entry.getDouble("kcal");
-        result.add(n, 1);
+    if (includeCalorieOnly)
+      for (JSONObject entry : db.list("calorie")) {
+        long t = entry.getLong("time");
+        if (t >= from && t < Math.min(to, now)) {
+          double[] n = new double[Nutrients.KEYS.length];
+          Arrays.fill(n, Double.NaN);
+          n[0] = entry.getDouble("kcal");
+          result.add(n, 1);
+        }
       }
-    }
     return result;
   }
 
@@ -245,7 +251,19 @@ public final class TrackerRepository {
                 && cache.optLong("through", 0) < midnight(date.plusDays(1)));
     double accruedResting =
         restingRate(date) * (to - from) / (double) (midnight(date.plusDays(1)) - from);
+    double calorieOnlyKcal = 0;
+    for (JSONObject entry : db.list("calorie")) {
+      long time = entry.getLong("time");
+      if (time >= from && time < to) calorieOnlyKcal += entry.getDouble("kcal");
+    }
+    // Each calorie-only record uses the fallback INSTEAD of macro TEF. The public intake
+    // nutrient totals still mark its macros unknown; no fabricated grams are persisted.
     return DailyExpenditure.calculate(
-        accruedResting, nutrientTotals(from, to, now), steps, extraActivity(date), stale);
+        accruedResting,
+        nutrientTotals(from, to, now, false),
+        steps,
+        extraActivity(date),
+        stale,
+        calorieOnlyKcal);
   }
 }

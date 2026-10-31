@@ -47,4 +47,21 @@ public class DailyExpenditureTest {
     assertEquals(180, e.steps, 0);
     assertTrue(e.stepsIncomplete);
   }
+
+  @Test
+  public void calorieOnlyFallbackIsSeparateFromMacroDigestion() {
+    Nutrients.Total food = new Nutrients.Total();
+    double[] values = new double[Nutrients.KEYS.length];
+    values[0] = 200;
+    values[1] = 25;
+    values[2] = 10;
+    values[3] = 2;
+    food.add(values, 1);
+    DailyExpenditure.Estimate e = DailyExpenditure.calculate(883, food, 0L, 0, false, 1100);
+    assertEquals(88, e.fallbackDigestion, 1e-9);
+    assertEquals(116.36, e.digestion, 1e-9);
+    assertEquals(999.36, e.total, 1e-9);
+    assertFalse(e.nutritionIncomplete);
+    assertEquals(200, food.values[0], 0);
+  }
 }

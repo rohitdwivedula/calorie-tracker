@@ -100,8 +100,15 @@ Digestion uses the existing per-day macro allocations without reducing food calo
 These fixed coefficients are approximations within the ranges discussed by
 [Westerterp (2004)](https://pmc.ncbi.nlm.nih.gov/articles/PMC524030/), not individual
 measurements. They live in `ExpenditureCoefficients.java`, together with the requested
-30 kcal per 1,000 steps, and are not configurable in Settings. Missing macros leave
-TEF incomplete (a known minimum when some macros are available), never assumed zero.
+30 kcal per 1,000 steps and a user-chosen 8% digestion fallback for calorie-only logs;
+none are configurable in Settings. A 1,100 kcal quick log adds 88 kcal of estimated
+digestion. The fallback applies only to that entry instead of macro-based TEF, never
+on top of it or to the whole day's calories. Its protein/carbs/fat remain unknown in
+nutrition summaries. Foods with saved macros retain the macro calculation even if
+label calories differ slightly from 4/4/9 arithmetic. Any unresolved missing macros
+outside calorie-only entries still leave digestion incomplete. The breakdown labels
+the fallback explicitly. Changing, backdating or deleting a quick log recalculates
+only its day's fallback; food calories are never changed.
 
 Steps use AndroidX Health Connect 1.1.0. Only READ_STEPS is requested, in the foreground;
 no writes, raw-record sums, custom counter, active-energy import or background permission.

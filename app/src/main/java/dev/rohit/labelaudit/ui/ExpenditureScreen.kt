@@ -45,6 +45,12 @@ fun ExpenditureBreakdown(
                 if (e.nutritionIncomplete && e.digestion == 0.0) "—"
                 else "${if(e.nutritionIncomplete) "≥" else ""}${kcal(e.digestion)} kcal",
             )
+            if (e.fallbackDigestion > 0)
+                Text(
+                    "Includes ${kcal(e.fallbackDigestion)} kcal using 8% for calorie-only logs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             InfoRow("Steps · est.", e.steps?.let { "${kcal(it)} kcal" } ?: "—")
             InfoRow("Extra activity", "${kcal(e.extra)} kcal")
             val cache = r.db.stepCache(date.toString(), r.zone.id)

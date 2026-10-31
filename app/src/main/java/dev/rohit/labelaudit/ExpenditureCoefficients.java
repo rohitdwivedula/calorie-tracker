@@ -12,5 +12,7 @@ public final class ExpenditureCoefficients {
   public static final double PROTEIN_TEF_FACTOR = 0.25;
   public static final double CARBOHYDRATE_TEF_FACTOR = 0.075;
   public static final double FAT_TEF_FACTOR = 0.02;
+  // User-chosen fallback for calorie-only logs; never added on top of macro-derived TEF.
+  public static final double CALORIE_ONLY_TEF_FACTOR = 0.08;
   public static final double KCAL_PER_1000_STEPS = 30.0;
 }
