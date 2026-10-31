@@ -209,4 +209,50 @@ class RepositoryIntegrationTest {
         assertEquals(56.0, r.goal(1), 0.0)
         r.db.close()
     }
+
+    @Test
+    fun birthMonthProfileRoundTripsWithoutBirthDayAndInvalidRestoreKeepsFacts() {
+        val r = TrackerRepository(context)
+        val current = java.time.YearMonth.now(r.zone)
+        val profile =
+            JSONObject()
+                .put("policy", NutrientReferences.POLICY)
+                .put("birthMonth", current.monthValue)
+                .put("birthYear", current.year - 30)
+                .put("sex", "male")
+                .put("stage", "general")
+        r.db.save("settings", r.settings.put("nutrientProfile", profile))
+        r.reload()
+        assertEquals(
+            30,
+            NutrientReferences.age(r.settings.getJSONObject("nutrientProfile"), current),
+        )
+        assertEquals(.4, r.goal(18), 1e-12)
+        val backup = r.db.backup()
+        r.db.restore(backup)
+        r.reload()
+        val restored = r.settings.getJSONObject("nutrientProfile")
+        assertEquals(current.monthValue, restored.getInt("birthMonth"))
+        assertEquals(current.year - 30, restored.getInt("birthYear"))
+        assertFalse(restored.has("age"))
+        assertFalse(restored.has("birthDay"))
+        val bad = JSONObject(backup)
+        val rows = bad.getJSONArray("records")
+        for (i in 0 until rows.length()) if (rows.getJSONObject(i).getString("kind") == "settings")
+            rows
+                .getJSONObject(i)
+                .getJSONObject("data")
+                .getJSONObject("nutrientProfile")
+                .put("birthMonth", 13)
+        try {
+            r.db.restore(bad.toString())
+            fail("Invalid month accepted")
+        } catch (expected: Exception) {}
+        r.reload()
+        assertEquals(
+            current.monthValue,
+            r.settings.getJSONObject("nutrientProfile").getInt("birthMonth"),
+        )
+        r.db.close()
+    }
 }

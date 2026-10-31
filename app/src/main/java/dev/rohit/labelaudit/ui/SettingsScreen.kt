@@ -30,9 +30,10 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
         Section("Nutrient references") {
             val profile = s.optJSONObject("nutrientProfile")
             Text(
-                if (profile == null) "Set age and reference sex once for automatic RDA/AI targets"
+                if (profile == null)
+                    "Set birth month/year and reference sex for automatic RDA/AI targets"
                 else
-                    "Age ${profile.getInt("age")} · ${profile.getString("sex").replaceFirstChar { it.uppercase() }} · ${profile.getString("stage")}",
+                    "Age ${NutrientReferences.age(profile, YearMonth.now(r.zone))} · ${profile.getString("sex").replaceFirstChar { it.uppercase() }} · ${profile.getString("stage")}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             TextButton(onClick = v::openNutrientProfile) {

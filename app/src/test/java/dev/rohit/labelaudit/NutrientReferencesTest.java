@@ -2,6 +2,9 @@ package dev.rohit.labelaudit;
 
 import static org.junit.Assert.*;
 
+import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import org.json.JSONObject;
 import org.junit.Test;
 
@@ -94,5 +97,86 @@ public class NutrientReferencesTest {
       } catch (IllegalArgumentException expected) {
       }
     }
+  }
+
+  private JSONObject birthProfile(int month, int year, String sex, String stage) throws Exception {
+    return new JSONObject()
+        .put("policy", NutrientReferences.POLICY)
+        .put("birthMonth", month)
+        .put("birthYear", year)
+        .put("sex", sex)
+        .put("stage", stage);
+  }
+
+  @Test
+  public void ageAdvancesOnlyAtStartOfBirthMonthIncludingYearRollover() throws Exception {
+    JSONObject p = birthProfile(12, 1996, "male", "general");
+    assertEquals(29, NutrientReferences.age(p, YearMonth.of(2026, 11)));
+    assertEquals(30, NutrientReferences.age(p, YearMonth.of(2026, 12)));
+    assertEquals(30, NutrientReferences.age(p, YearMonth.of(2027, 1)));
+    assertEquals(31, NutrientReferences.age(p, YearMonth.of(2027, 12)));
+    assertEquals(YearMonth.of(1996, 12), NutrientReferences.parseBirthMonth("12/1996"));
+    assertFalse(p.has("age"));
+    assertFalse(p.has("birthDay"));
+  }
+
+  @Test
+  public void nutrientBandsUpdateAutomaticallyFromBirthMonth() throws Exception {
+    JSONObject p = birthProfile(3, 1996, "male", "general");
+    assertEquals(.4, NutrientReferences.value(18, p, YearMonth.of(2027, 2)), 1e-12);
+    assertEquals(.42, NutrientReferences.value(18, p, YearMonth.of(2027, 3)), 1e-12);
+    p = birthProfile(3, 1976, "female", "general");
+    assertEquals(1.0, NutrientReferences.value(16, p, YearMonth.of(2027, 2)), 1e-12);
+    assertEquals(1.2, NutrientReferences.value(16, p, YearMonth.of(2027, 3)), 1e-12);
+    p = birthProfile(3, 1956, "male", "general");
+    assertEquals(.000015, NutrientReferences.value(7, p, YearMonth.of(2027, 2)), 1e-12);
+    assertEquals(.000020, NutrientReferences.value(7, p, YearMonth.of(2027, 3)), 1e-12);
+  }
+
+  @Test
+  public void birthMonthUsesLocalCalendarAndLegacyAgesStayUnchanged() throws Exception {
+    JSONObject p = birthProfile(11, 1996, "male", "general");
+    Instant boundary = Instant.parse("2026-11-01T00:30:00Z");
+    assertEquals(
+        29,
+        NutrientReferences.age(p, YearMonth.from(boundary.atZone(ZoneId.of("America/Chicago")))));
+    assertEquals(30, NutrientReferences.age(p, YearMonth.from(boundary.atZone(ZoneId.of("UTC")))));
+    JSONObject old = profile(30, "male", "general");
+    assertEquals(30, NutrientReferences.age(old, YearMonth.of(2030, 12)));
+    assertFalse(old.has("birthMonth"));
+  }
+
+  @Test
+  public void malformedAndUnsupportedBirthProfilesAreRejected() throws Exception {
+    for (String text : new String[] {"1/1996", "13/1996", "01/96", "1996-01", "01/1996/15"}) {
+      try {
+        NutrientReferences.parseBirthMonth(text);
+        fail("Malformed birth month accepted");
+      } catch (IllegalArgumentException expected) {
+      }
+    }
+    for (JSONObject p :
+        new JSONObject[] {
+          birthProfile(13, 1996, "male", "general"),
+          birthProfile(1, 2030, "male", "general"),
+          birthProfile(1, 2010, "male", "general"),
+          birthProfile(1, 1996, "male", "general").put("age", 30),
+          birthProfile(1, 1996, "male", "general").put("birthMonth", 1.5)
+        }) {
+      try {
+        NutrientReferences.validate(p, YearMonth.of(2026, 10));
+        fail("Invalid birth profile accepted");
+      } catch (Exception expected) {
+      }
+    }
+  }
+
+  @Test
+  public void agingBeyondLifeStageTableDoesNotCrashOrRewriteProfile() throws Exception {
+    JSONObject p = birthProfile(11, 1976, "female", "pregnant");
+    assertEquals(71, NutrientReferences.value(1, p, YearMonth.of(2026, 11)), 0);
+    assertEquals(0, NutrientReferences.value(1, p, YearMonth.of(2027, 11)), 0);
+    assertEquals("pregnant", p.getString("stage"));
+    assertEquals(1976, p.getInt("birthYear"));
   }
 }

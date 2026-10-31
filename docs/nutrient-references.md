@@ -4,10 +4,21 @@ Policy: `us-dri-adult-v1`, checked against the official sources below on 2026-10
 This is a bundled, offline reference calculation over an explicitly entered profile.
 It does not estimate requirements from food logs or change intake/expenditure facts.
 
-The profile records age in years, a male/female reference-table category and general,
-pregnancy or lactation life stage. Adult ages 19–120 are supported. Pregnancy/lactation
-rows cover female ages 19–50; unsupported combinations fail validation. No demographics
-are inferred. Age is the entered current age and can be updated in Settings.
+The profile records birth month/year (MM/YYYY), a male/female reference-table category
+and general, pregnancy or lactation life stage. No birth day is collected or inferred.
+The current reference age is calculated using the app's local calendar month. Age
+advances on the first day of the birth month; this month-granularity convention is
+shown beside the input. Age-based targets update when queried or on app resume.
+
+Adult ages 19–120 are supported. Pregnancy/lactation rows cover female ages 19–50;
+unsupported combinations fail validation on save/import. If time later moves a saved
+profile beyond a supported row, derived defaults become unavailable instead of crashing
+or changing the saved profile. Custom targets and food logging still work.
+
+Legacy age-only profiles remain readable at their originally entered age. The edit form
+shows that previous value and asks for month/year rather than guessing a date from it.
+New saves store birthMonth/birthYear and no static age. Neither demographics nor exact
+birthdays are inferred.
 
 RDA and AI are adequacy reference targets, not safety upper limits. Sodium uses the
 2019 **CDRR threshold of 2,300 mg/day**, not an RDA, AI or UL. Its statistics count days
@@ -54,7 +65,8 @@ NE and vitamin E alpha-tocopherol; comparison quality depends on the food provid
 using comparable nutrient forms. This change does not infer chemical forms or perform
 unjustified conversions of historical snapshots. Reference units are explicit in the UI.
 
-The optional `settings.nutrientProfile` object includes policy, age, sex and stage. Defaults
+The optional `settings.nutrientProfile` object includes policy, birthMonth, birthYear, sex
+and stage (legacy profiles may contain age instead). Defaults
 are derived at read time and are never copied into the custom `nutrientGoals` map. Settings
 validation also validates imported profiles transactionally; the existing schema 4 JSON
 backup carries the profile without a SQL schema change. Backups with no profile still work.

@@ -515,11 +515,13 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         go("nutrient-profile")
     }
 
-    fun saveNutrientProfile(age: Int, sex: String, stage: String) {
+    fun saveNutrientProfile(birthMonthYear: String, sex: String, stage: String) {
+        val birth = NutrientReferences.parseBirthMonth(birthMonthYear)
         val profile =
             JSONObject()
                 .put("policy", NutrientReferences.POLICY)
-                .put("age", age)
+                .put("birthMonth", birth.monthValue)
+                .put("birthYear", birth.year)
                 .put("sex", sex)
                 .put("stage", stage)
         NutrientReferences.validate(profile)

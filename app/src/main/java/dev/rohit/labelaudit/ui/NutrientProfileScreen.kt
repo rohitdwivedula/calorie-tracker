@@ -1,31 +1,66 @@
 package dev.rohit.labelaudit
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.time.YearMonth
 
 @Composable
 fun NutrientProfileScreen(v: TrackerViewModel) {
     val profile = v.repo.settings.optJSONObject("nutrientProfile")
-    val age = v.field("nutrient-profile", "age", profile?.getInt("age")?.toString() ?: "")
+    val initialBirth =
+        profile
+            ?.takeIf { it.has("birthMonth") && it.has("birthYear") }
+            ?.let { "%02d/%04d".format(it.getInt("birthMonth"), it.getInt("birthYear")) } ?: ""
+    val birthText = v.field("nutrient-profile", "birth", initialBirth)
+    val currentAge =
+        runCatching {
+                val birth = NutrientReferences.parseBirthMonth(birthText)
+                YearMonth.now(v.repo.zone).let {
+                    it.year - birth.year - if (it.monthValue < birth.monthValue) 1 else 0
+                }
+            }
+            .getOrNull()
     val sex = v.field("nutrient-profile", "sex", profile?.getString("sex") ?: "")
     val stage = v.field("nutrient-profile", "stage", profile?.getString("stage") ?: "general")
     val uri = LocalUriHandler.current
     var about by rememberSaveable { mutableStateOf(false) }
     Page {
         Section("Reference profile", "US adult RDA/AI tables · ages 19+") {
-            FormField(
-                v,
-                "nutrient-profile",
-                "age",
-                "Age (years)",
-                profile?.getInt("age")?.toString() ?: "",
-                true,
+            OutlinedTextField(
+                value = birthText,
+                onValueChange = {
+                    val digits = it.filter(Char::isDigit).take(6)
+                    val formatted =
+                        if (digits.length > 2) digits.take(2) + "/" + digits.drop(2) else digits
+                    v.field("nutrient-profile", "birth", formatted, true)
+                },
+                label = { Text("Birth month/year (MM/YYYY)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
             )
+            Text(
+                "Age updates at the start of your birth month. No birth day is stored.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (currentAge != null && currentAge >= 0)
+                Text(
+                    "Current reference age: $currentAge",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            if (profile?.has("age") == true)
+                Text(
+                    "Previously entered age: ${profile.getInt("age")}. Add birth month/year for automatic updates.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             Text("Reference sex", style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("male", "female").forEach { value ->
@@ -63,8 +98,8 @@ fun NutrientProfileScreen(v: TrackerViewModel) {
                 }
             }
             Button(
-                enabled = age.isNotBlank() && sex.isNotBlank(),
-                onClick = { v.run { v.saveNutrientProfile(age.toInt(), sex, stage) } },
+                enabled = currentAge != null && sex.isNotBlank(),
+                onClick = { v.run { v.saveNutrientProfile(birthText, sex, stage) } },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Use reference targets")

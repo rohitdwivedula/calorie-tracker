@@ -277,13 +277,17 @@ class ComposeFlowTest {
     @Config(qualifiers = "w320dp-h891dp-xhdpi")
     @Test
     fun oneReferenceProfileFillsNutrientTargetsAndKeepsCustomProtein() {
+        var birth = ""
         ui.runOnIdle {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val current = java.time.YearMonth.now(v.repo.zone)
+            birth = "%02d/%04d".format(current.monthValue, current.year - 30)
             v.saveGoal(1, 125.0)
             v.go("stats")
         }
         ui.onNodeWithText("Set reference profile").performClick()
-        ui.onNodeWithText("Age (years)").performTextInput("30")
+        ui.onNodeWithText("Birth month/year (MM/YYYY)").performTextInput(birth)
+        ui.onNodeWithText("Current reference age: 30").assertIsDisplayed()
         ui.onNodeWithText("Male").performClick()
         screenshot("nutrient-profile")
         ui.onNodeWithText("Use reference targets").performClick()
@@ -295,7 +299,7 @@ class ComposeFlowTest {
             org.junit.Assert.assertEquals(.000015, v.repo.goal(7), 1e-12)
         }
         ui.onNodeWithText("Reference profile").performClick()
-        ui.onNodeWithText("Age (years)").assertTextContains("30")
+        ui.onNodeWithText("Birth month/year (MM/YYYY)").assertTextContains(birth)
         ui.onNodeWithText("Female").performClick()
         ui.onNodeWithText("Use reference targets").performClick()
         ui.runOnIdle {

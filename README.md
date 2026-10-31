@@ -54,7 +54,9 @@ coverage over logged days, including today so far. Zero-calorie foods count as l
 days; saved foods/cooking do not. Missing-nutrient days are excluded per nutrient.
 
 Choose **Set reference profile** in Stats or **Settings → Nutrient references** once
-for automatic US adult (19+) age/sex-specific RDA/AI targets. Optional pregnancy/lactation
+for automatic US adult (19+) age/sex-specific RDA/AI targets. Enter birth month/year
+as MM/YYYY; age and reference bands update automatically at the start of the birth
+month. No birth day is stored. Legacy age-only profiles stay readable until updated. Optional pregnancy/lactation
 rows cover ages 19–50. No demographics are assumed. Existing custom targets override
 references and can be reset individually to the profile value. Sodium uses a CDRR
 threshold/limit rather than an adequacy goal, and total fat shows an energy range rather

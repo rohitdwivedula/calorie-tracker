@@ -181,7 +181,8 @@ public final class TrackerRepository {
     JSONObject goals = settings.optJSONObject("nutrientGoals");
     return customGoal(i)
         ? goals.optDouble(Nutrients.KEYS[i])
-        : NutrientReferences.value(i, settings.optJSONObject("nutrientProfile"));
+        : NutrientReferences.value(
+            i, settings.optJSONObject("nutrientProfile"), YearMonth.now(zone));
   }
 
   public boolean customGoal(int i) {

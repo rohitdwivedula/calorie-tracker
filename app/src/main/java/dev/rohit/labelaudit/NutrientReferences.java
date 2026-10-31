@@ -1,6 +1,10 @@
 package dev.rohit.labelaudit;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.util.Arrays;
+import java.util.Locale;
 import org.json.JSONObject;
 
 /**
@@ -14,11 +18,44 @@ public final class NutrientReferences {
 
   private NutrientReferences() {}
 
+  public static YearMonth parseBirthMonth(String text) {
+    if (!text.matches("(0[1-9]|1[0-2])/[0-9]{4}"))
+      throw new IllegalArgumentException("Enter birth month/year as MM/YYYY");
+    return YearMonth.parse(
+        text,
+        DateTimeFormatter.ofPattern("MM/uuuu", Locale.US).withResolverStyle(ResolverStyle.STRICT));
+  }
+
+  /** No birth day is stored. Age advances on the first day of the birth month. */
+  public static int age(JSONObject profile, YearMonth asOf) throws Exception {
+    boolean birth = profile.has("birthMonth") || profile.has("birthYear");
+    if (!birth) {
+      int legacy = profile.getInt("age");
+      if (profile.getDouble("age") != legacy)
+        throw new IllegalArgumentException("Age must be whole years");
+      return legacy;
+    }
+    if (profile.has("age"))
+      throw new IllegalArgumentException(
+          "Profile must contain birth month/year or legacy age, not both");
+    int month = profile.getInt("birthMonth"), year = profile.getInt("birthYear");
+    if (profile.getDouble("birthMonth") != month
+        || profile.getDouble("birthYear") != year
+        || year < 1000
+        || year > 9999) throw new IllegalArgumentException("Invalid birth month/year");
+    YearMonth.of(year, month);
+    return asOf.getYear() - year - (asOf.getMonthValue() < month ? 1 : 0);
+  }
+
   public static void validate(JSONObject profile) throws Exception {
+    validate(profile, YearMonth.now());
+  }
+
+  public static void validate(JSONObject profile, YearMonth asOf) throws Exception {
     if (!POLICY.equals(profile.getString("policy")))
       throw new IllegalArgumentException("Unsupported nutrient reference policy");
-    int age = profile.getInt("age");
-    if (profile.getDouble("age") != age || age < 19 || age > 120)
+    int age = age(profile, asOf);
+    if (age < 19 || age > 120)
       throw new IllegalArgumentException("Adult reference age must be 19–120 years");
     String sex = profile.getString("sex"), stage = profile.getString("stage");
     if (!Arrays.asList("male", "female").contains(sex))
@@ -31,13 +68,20 @@ public final class NutrientReferences {
   }
 
   public static double value(int index, JSONObject profile) {
+    return value(index, profile, YearMonth.now());
+  }
+
+  public static double value(int index, JSONObject profile, YearMonth asOf) {
     if (profile == null) return 0;
+    int age;
     try {
-      validate(profile);
+      validate(profile, asOf);
+      age = age(profile, asOf);
     } catch (Exception e) {
-      throw new IllegalArgumentException(e.getMessage(), e);
+      // Time can move an existing profile beyond a supported life-stage/age row. Keep food
+      // logging usable and the saved facts intact; do not invent a new reference category.
+      return 0;
     }
-    int age = profile.optInt("age");
     boolean male = profile.optString("sex").equals("male");
     String stage = profile.optString("stage");
     // Order matches Nutrients.KEYS. These literals use the displayed g/mg/microgram units.

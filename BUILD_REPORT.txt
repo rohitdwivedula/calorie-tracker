@@ -5,8 +5,10 @@ Changes:
 - Stats defaults to Today, displaying recorded nutrient totals so far, including vitamins
   and minerals. Partial known amounts show >=; missing values stay unknown, not zero.
 - 7/30-day logged-day averages and missing-data exclusions remain available.
-- One optional adult reference profile (age, DRI reference sex, life stage) supplies
+- One optional adult profile (birth month/year, DRI reference sex, life stage) supplies
   published RDA/AI targets automatically. No demographics guessed; existing overrides win.
+- Profile uses MM/YYYY with no birth day; current age updates at the start of the birth
+  month in the local calendar. Legacy age-only profiles stay readable, with no date guessed.
 - Profile entry from Stats/Settings, optional per-nutrient override and reset to reference.
 - Reference boundaries for ages 31/51/71, optional pregnancy/lactation ages 19–50,
   RAE/DFE/NE reference units and 2019 potassium AI/sodium CDRR values documented.
@@ -18,16 +20,17 @@ Changes:
 
 Validation:
 - assembleRelease, testDebugUnitTest, lintDebug, lintRelease passed offline.
-- 112 tests passed; zero failures/errors/skips. Includes reference age boundaries,
-  units/types, pregnancy/lactation rows, invalid profiles, override/reset and backup
+- 118 tests passed; zero failures/errors/skips. Includes reference age boundaries,
+  birth-month/year rollover, local-month transitions, automatic nutrient band changes,
+  legacy ages, units/types, pregnancy/lactation rows, invalid profiles, override/reset and backup
   validation, Today versus averages, partial vitamins and profile entry/edit UI.
 - APK signature and 16 KB zip alignment verified; optimized/non-debuggable build retained.
 - No private profiles, food data, signing keys, local tooling or exports committed.
 - Robolectric synthetic previews reviewed; no physical-device test of these new views.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6147337
-SHA256: 4ecf63fad644286fc6255120f9b7f9bbebeaefdba86af1340f2e84d340d3041a
+Bytes: 6148893
+SHA256: 3b6fc608f6fce13ea74436bc18702a63ac133195daa521983f339d93edc77348
 Review: docs/screenshots/compose-stats-today-vitamins.png,
         docs/screenshots/compose-nutrient-profile.png,
         docs/nutrient-references.md (values and official sources).
