@@ -212,6 +212,99 @@ class ComposeFlowTest {
         ui.onNodeWithText("New dish").assertIsDisplayed()
     }
 
+    @Test
+    fun statsTodayShowsCurrentTotalsAndPartialVitaminsInsteadOfAverages() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val today = java.time.LocalDate.now(v.repo.zone)
+            v.repo.db.save("settings", v.repo.settings.put("start", today.minusDays(1).toString()))
+            v.repo.db.save(
+                "rate",
+                org.json
+                    .JSONObject()
+                    .put("id", "history-rate")
+                    .put("date", today.minusDays(1).toString())
+                    .put("value", 2000),
+            )
+            fun log(id: String, time: Long, vitamin: Double?) {
+                val food =
+                    org.json
+                        .JSONObject()
+                        .put("id", "food-$id")
+                        .put("name", "Synthetic food")
+                        .put("basis", 100)
+                        .put("unit", "g")
+                        .put("kcal", 100)
+                        .put("protein", 10)
+                        .put("carbs", 5)
+                        .put("fat", 2)
+                if (vitamin != null) food.put("vitamin-c", vitamin)
+                v.repo.db.save(
+                    "direct",
+                    org.json
+                        .JSONObject()
+                        .put("id", id)
+                        .put("name", "Synthetic food")
+                        .put("available", time)
+                        .put("completed", time)
+                        .put("share", 1)
+                        .put(
+                            "ingredients",
+                            org.json
+                                .JSONArray()
+                                .put(org.json.JSONObject().put("food", food).put("quantity", 100)),
+                        ),
+                )
+            }
+            log("yesterday", v.repo.midnight(today.minusDays(1)) + 12 * 3600000, .1)
+            log("today-known", System.currentTimeMillis() - 120000, .025)
+            log("today-unknown", System.currentTimeMillis() - 60000, null)
+            v.refresh()
+            v.go("stats")
+        }
+        ui.onNodeWithText("Today · so far").assertIsDisplayed()
+        ui.onNodeWithText("200 kcal").assertExists()
+        ui.onNodeWithText("Vitamins").performClick()
+        ui.onNodeWithText("≥25 mg").assertExists()
+        ui.onAllNodesWithText("Not provided by logged foods").onFirst().assertExists()
+        screenshot("stats-today-vitamins")
+        ui.onNodeWithText("7 days").performClick()
+        ui.onNodeWithText("100 mg / day").assertExists()
+        ui.onNodeWithContentDescription("Show today's nutrients").performClick()
+        ui.onNodeWithText("≥25 mg").assertExists()
+    }
+
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun oneReferenceProfileFillsNutrientTargetsAndKeepsCustomProtein() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.saveGoal(1, 125.0)
+            v.go("stats")
+        }
+        ui.onNodeWithText("Set reference profile").performClick()
+        ui.onNodeWithText("Age (years)").performTextInput("30")
+        ui.onNodeWithText("Male").performClick()
+        screenshot("nutrient-profile")
+        ui.onNodeWithText("Use reference targets").performClick()
+        ui.onNodeWithText("Today · so far").assertIsDisplayed()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(125.0, v.repo.goal(1), 0.0)
+            org.junit.Assert.assertEquals(38.0, v.repo.goal(4), 0.0)
+            org.junit.Assert.assertEquals(.000015, v.repo.goal(7), 1e-12)
+        }
+        ui.onNodeWithText("Reference profile").performClick()
+        ui.onNodeWithText("Age (years)").assertTextContains("30")
+        ui.onNodeWithText("Female").performClick()
+        ui.onNodeWithText("Use reference targets").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(125.0, v.repo.goal(1), 0.0)
+            org.junit.Assert.assertEquals(25.0, v.repo.goal(4), 0.0)
+        }
+    }
+
     // Robolectric #8460: dialogs with text input loop with width qualifiers above 320dp.
     // Keep the interaction test on its supported profile; other screenshots use 411dp.
     @Config(qualifiers = "w320dp-h891dp-xhdpi")

@@ -50,7 +50,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                     Text(r.nutrientText(totals, 1), style = MaterialTheme.typography.titleLarge)
                     if (r.goal(1) > 0)
                         Text(
-                            "of ${fmt(r.goal(1))} g goal",
+                            "of ${fmt(r.goal(1))} g ${if(r.customGoal(1)) "goal" else r.goalBasis(1)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                 }
@@ -63,7 +63,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                     Text(r.nutrientText(totals, 4), style = MaterialTheme.typography.titleLarge)
                     if (r.goal(4) > 0)
                         Text(
-                            "of ${fmt(r.goal(4))} g goal",
+                            "of ${fmt(r.goal(4))} g ${if(r.customGoal(4)) "goal" else r.goalBasis(4)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                 }

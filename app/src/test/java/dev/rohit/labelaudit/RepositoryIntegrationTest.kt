@@ -160,4 +160,53 @@ class RepositoryIntegrationTest {
         org.junit.Assert.assertEquals(150.0, record.getDouble("kcal"), 0.0)
         v.repo.db.close()
     }
+
+    @Test
+    fun nutrientProfileReferencesAndCustomOverridesSurviveBackupWithoutChangingFood() {
+        val r = TrackerRepository(context)
+        r.db.save("food", food())
+        val originalFood = r.db.list("food").single().toString()
+        val settings =
+            r.settings.put(
+                "nutrientProfile",
+                JSONObject()
+                    .put("policy", NutrientReferences.POLICY)
+                    .put("age", 30)
+                    .put("sex", "male")
+                    .put("stage", "general"),
+            )
+        r.db.save("settings", settings)
+        r.reload()
+        assertEquals(56.0, r.goal(1), 0.0)
+        assertEquals(38.0, r.goal(4), 0.0)
+        settings.put("nutrientGoals", JSONObject().put("protein", 125))
+        r.db.save("settings", settings)
+        r.reload()
+        assertEquals(125.0, r.goal(1), 0.0)
+        assertTrue(r.customGoal(1))
+        val backup = r.db.backup()
+        r.db.restore(backup)
+        r.reload()
+        assertEquals(125.0, r.goal(1), 0.0)
+        assertEquals(38.0, r.goal(4), 0.0)
+        assertEquals(originalFood, r.db.list("food").single().toString())
+        settings.getJSONObject("nutrientGoals").remove("protein")
+        r.db.save("settings", settings)
+        r.reload()
+        assertEquals(56.0, r.goal(1), 0.0)
+        val invalid = JSONObject(backup)
+        val rows = invalid.getJSONArray("records")
+        for (i in 0 until rows.length()) if (rows.getJSONObject(i).getString("kind") == "settings")
+            rows
+                .getJSONObject(i)
+                .getJSONObject("data")
+                .getJSONObject("nutrientProfile")
+                .put("sex", "unknown")
+        try {
+            r.db.restore(invalid.toString())
+            fail("Invalid profile restored")
+        } catch (expected: Exception) {}
+        assertEquals(56.0, r.goal(1), 0.0)
+        r.db.close()
+    }
 }

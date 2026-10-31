@@ -293,6 +293,7 @@ public final class Data extends SQLiteOpenHelper {
       java.time.LocalDate.parse(j.getString("start"));
       number(j, "duration", 1, 720);
       if (j.has("energyStart")) java.time.LocalDate.parse(j.getString("energyStart"));
+      if (j.has("nutrientProfile")) NutrientReferences.validate(j.getJSONObject("nutrientProfile"));
       if (j.has("nutrientGoals")) {
         JSONObject goals = j.getJSONObject("nutrientGoals");
         for (int i = 1; i < Nutrients.KEYS.length; i++)

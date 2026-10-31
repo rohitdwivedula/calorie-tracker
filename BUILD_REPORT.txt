@@ -2,22 +2,33 @@ Pending local update — app 1.0.12, versionCode 14
 User approval required before push/release publication.
 
 Changes:
-- Remove the temporary Compare step queries button, dialog, ViewModel state/coroutine,
-  comparison-only Health Connect reads, tests and obsolete synthetic preview.
-- Keep whole-local-day aggregate steps, unchanged resting accrual, normal refresh,
-  source-priority deduplication and missing/stale cache handling.
-- Keep the regression that verifies steps are not prorated by elapsed day fraction.
-- No recorded food/activity facts, settings, database or backup schema changes.
-- Optimized, non-debuggable sideload build retains existing local signing configuration.
+- Stats defaults to Today, displaying recorded nutrient totals so far, including vitamins
+  and minerals. Partial known amounts show >=; missing values stay unknown, not zero.
+- 7/30-day logged-day averages and missing-data exclusions remain available.
+- One optional adult reference profile (age, DRI reference sex, life stage) supplies
+  published RDA/AI targets automatically. No demographics guessed; existing overrides win.
+- Profile entry from Stats/Settings, optional per-nutrient override and reset to reference.
+- Reference boundaries for ages 31/51/71, optional pregnancy/lactation ages 19–50,
+  RAE/DFE/NE reference units and 2019 potassium AI/sodium CDRR values documented.
+- Sodium is a CDRR limit, not an adequacy goal/UL; total fat has an AMDR, no gram RDA.
+- References derived from profile, separate from food facts. Profile and custom targets
+  validated through existing schema 4 backup/restore; no database migration required.
+- Pending cleanup removes temporary step comparison UI/reads/tests/preview. Whole-day
+  steps query, normal refresh, resting accrual and its regression tests retained.
 
 Validation:
-- assembleRelease, testDebugUnitTest, lintDebug and lintRelease passed.
-- 104 tests passed; zero failures/errors/skips. Two tests for the removed diagnostic
-  were deleted; whole-day query, local-day/DST and normal expenditure UI tests retained.
-- APK signature and 16 KB zip alignment verified.
-- No keys, personal databases/exports or real health-data screenshots committed.
+- assembleRelease, testDebugUnitTest, lintDebug, lintRelease passed offline.
+- 112 tests passed; zero failures/errors/skips. Includes reference age boundaries,
+  units/types, pregnancy/lactation rows, invalid profiles, override/reset and backup
+  validation, Today versus averages, partial vitamins and profile entry/edit UI.
+- APK signature and 16 KB zip alignment verified; optimized/non-debuggable build retained.
+- No private profiles, food data, signing keys, local tooling or exports committed.
+- Robolectric synthetic previews reviewed; no physical-device test of these new views.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6141521
-SHA256: a1e2692595fffabd5080f5c72d07192082b0b8dc848fb3767d2bfb3fc339dcce
-No release published for this pending cleanup.
+Bytes: 6147337
+SHA256: 4ecf63fad644286fc6255120f9b7f9bbebeaefdba86af1340f2e84d340d3041a
+Review: docs/screenshots/compose-stats-today-vitamins.png,
+        docs/screenshots/compose-nutrient-profile.png,
+        docs/nutrient-references.md (values and official sources).
+No release published for this pending update.

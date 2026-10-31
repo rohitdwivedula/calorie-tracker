@@ -179,7 +179,24 @@ public final class TrackerRepository {
 
   public double goal(int i) {
     JSONObject goals = settings.optJSONObject("nutrientGoals");
-    return goals == null ? 0 : goals.optDouble(Nutrients.KEYS[i], 0);
+    return customGoal(i)
+        ? goals.optDouble(Nutrients.KEYS[i])
+        : NutrientReferences.value(i, settings.optJSONObject("nutrientProfile"));
+  }
+
+  public boolean customGoal(int i) {
+    JSONObject goals = settings.optJSONObject("nutrientGoals");
+    return goals != null && goals.has(Nutrients.KEYS[i]);
+  }
+
+  public String goalBasis(int i) {
+    return customGoal(i)
+        ? "Custom"
+        : settings.has("nutrientProfile") ? NutrientReferences.basis(i) : "";
+  }
+
+  public String goalUnit(int i) {
+    return customGoal(i) ? Nutrients.unit(i) : NutrientReferences.unit(i);
   }
 
   public double rate(LocalDate date) throws Exception {

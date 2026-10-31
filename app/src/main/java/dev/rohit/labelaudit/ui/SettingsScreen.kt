@@ -27,6 +27,18 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
     val today = LocalDate.now(r.zone)
     val week = v.field("settings", "week", s.getInt("week").toString()).toInt()
     Page {
+        Section("Nutrient references") {
+            val profile = s.optJSONObject("nutrientProfile")
+            Text(
+                if (profile == null) "Set age and reference sex once for automatic RDA/AI targets"
+                else
+                    "Age ${profile.getInt("age")} · ${profile.getString("sex").replaceFirstChar { it.uppercase() }} · ${profile.getString("stage")}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(onClick = v::openNutrientProfile) {
+                Text(if (profile == null) "Set reference profile" else "Edit reference profile")
+            }
+        }
         Section("Energy assumptions") {
             FormField(
                 v,

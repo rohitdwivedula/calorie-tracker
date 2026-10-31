@@ -510,6 +510,32 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         home()
     }
 
+    fun openNutrientProfile() {
+        clearForm("nutrient-profile")
+        go("nutrient-profile")
+    }
+
+    fun saveNutrientProfile(age: Int, sex: String, stage: String) {
+        val profile =
+            JSONObject()
+                .put("policy", NutrientReferences.POLICY)
+                .put("age", age)
+                .put("sex", sex)
+                .put("stage", stage)
+        NutrientReferences.validate(profile)
+        val settings = JSONObject(repo.settings.toString()).put("nutrientProfile", profile)
+        repo.db.save("settings", settings)
+        back()
+        refresh()
+    }
+
+    fun clearNutrientProfile() {
+        val settings = JSONObject(repo.settings.toString()).apply { remove("nutrientProfile") }
+        repo.db.save("settings", settings)
+        back()
+        refresh()
+    }
+
     fun saveGoal(index: Int, value: Double?) {
         val s = JSONObject(repo.settings.toString())
         val g = s.optJSONObject("nutrientGoals") ?: JSONObject()

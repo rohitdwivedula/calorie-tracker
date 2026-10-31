@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.*
@@ -22,7 +23,7 @@ import org.json.*
 
 @Composable
 fun StatsScreen(v: TrackerViewModel) {
-    var period by rememberSaveable { mutableIntStateOf(7) }
+    var period by rememberSaveable { mutableIntStateOf(1) }
     var group by rememberSaveable { mutableIntStateOf(0) }
     var goalIndex by rememberSaveable { mutableIntStateOf(-1) }
     val days =
@@ -51,21 +52,35 @@ fun StatsScreen(v: TrackerViewModel) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(7, 30).forEach { p ->
+                listOf(1, 7, 30).forEach { p ->
                     FilterChip(
                         selected = period == p,
                         onClick = { period = p },
-                        label = { Text("$p days") },
+                        label = { Text(if (p == 1) "Today" else "$p days") },
+                        modifier =
+                            Modifier.semantics {
+                                contentDescription =
+                                    if (p == 1) "Show today's nutrients" else "Show $p day averages"
+                            },
                     )
                 }
             }
         }
         item {
             Text(
-                "${days.size}/$period days logged · includes today so far",
+                if (period == 1) "Today · so far"
+                else "${days.size}/$period days logged · includes today so far",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        item {
+            TextButton(onClick = v::openNutrientProfile) {
+                Text(
+                    if (v.repo.settings.has("nutrientProfile")) "Reference profile"
+                    else "Set reference profile"
+                )
+            }
         }
         item {
             ScrollableTabRow(selectedTabIndex = group, edgePadding = 0.dp) {
@@ -79,7 +94,8 @@ fun StatsScreen(v: TrackerViewModel) {
                 EmptyState(
                     Icons.Default.BarChart,
                     "A little more history",
-                    "Log a food or portion to start your daily averages.",
+                    if (period == 1) "Log a food or portion to see today’s nutrients."
+                    else "Log a food or portion to start your daily averages.",
                 )
             }
         items(range.toList(), key = { it }) { i ->
@@ -99,35 +115,60 @@ fun StatsScreen(v: TrackerViewModel) {
                         if (i > 0)
                             Icon(
                                 Icons.Default.Tune,
-                                "Set goal",
+                                "Adjust target",
                                 Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                     }
                     Text(
-                        if (tally.average().isNaN()) "—"
+                        if (period == 1)
+                            days.firstOrNull()?.let { v.repo.nutrientText(it, i) } ?: "—"
+                        else if (tally.average().isNaN()) "—"
                         else
                             "${fmt(tally.average()*Nutrients.displayFactor(i))} ${Nutrients.unit(i)} / day",
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     if (i > 0) {
                         val goal = v.repo.goal(i)
-                        Text(
-                            if (goal > 0)
-                                "${tally.met}/${days.size} days ${if(Nutrients.KEYS[i]=="sodium")"within limit"else "met goal"} · ${fmt(goal*Nutrients.displayFactor(i))} ${Nutrients.unit(i)}"
-                            else "Set a daily ${if(Nutrients.KEYS[i]=="sodium")"limit"else "goal"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        val today = days.firstOrNull()
+                        if (goal > 0 || i == 3)
+                            Text(
+                                if (period == 1 && goal > 0) {
+                                    if (today == null) "No intake logged today"
+                                    else if (today.missing[i] && !today.known[i])
+                                        "${v.repo.goalBasis(i)} · ${fmt(goal*Nutrients.displayFactor(i))} ${v.repo.goalUnit(i)}"
+                                    else
+                                        "${if (today.missing[i]) "≥" else ""}${fmt(today.values[i] / goal * 100)}% of daily ${if (Nutrients.KEYS[i] == "sodium") "limit" else "reference"} · ${fmt(goal*Nutrients.displayFactor(i))} ${v.repo.goalUnit(i)} (${v.repo.goalBasis(i)})"
+                                } else if (goal > 0)
+                                    "${tally.met}/${days.size} days ${if(Nutrients.KEYS[i]=="sodium")"within limit"else "reached reference"} · ${fmt(goal*Nutrients.displayFactor(i))} ${v.repo.goalUnit(i)} (${v.repo.goalBasis(i)})"
+                                else if (i == 3) "No fixed fat RDA · 20–35% of energy range"
+                                else "Choose one reference profile for automatic targets",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        if (
+                            days.isNotEmpty() &&
+                                goal > 0 &&
+                                (period != 1 || today?.known?.get(i) == true)
                         )
-                        if (days.isNotEmpty() && goal > 0)
                             LinearProgressIndicator(
-                                progress = { tally.met.toFloat() / days.size },
+                                progress = {
+                                    if (period == 1)
+                                        (today!!.values[i] / goal).toFloat().coerceIn(0f, 1f)
+                                    else tally.met.toFloat() / days.size
+                                },
                                 Modifier.fillMaxWidth(),
                             )
                     }
+
                     if (tally.unknown > 0)
                         Text(
-                            "${tally.unknown} days incomplete · average uses ${tally.complete} complete days",
+                            if (period == 1) {
+                                if (days.first().known[i])
+                                    "Partial total · some foods have no data for this nutrient"
+                                else "Not provided by logged foods"
+                            } else
+                                "${tally.unknown} days incomplete · average uses ${tally.complete} complete days",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -136,7 +177,10 @@ fun StatsScreen(v: TrackerViewModel) {
         }
         item {
             Text(
-                "Current personal goals, not personalized RDAs. Missing-data days are excluded per nutrient. Unlogged food isn't included.",
+                if (period == 1)
+                    "≥ is a known minimum. Missing nutrients aren't zero. Unlogged food isn't included."
+                else
+                    "Current reference profile and custom targets. Missing-data days are excluded per nutrient. Unlogged food isn't included.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -152,15 +196,13 @@ fun StatsScreen(v: TrackerViewModel) {
             }
         AlertDialog(
             onDismissRequest = { goalIndex = -1 },
-            title = {
-                Text("${Nutrients.NAMES[i]} ${if(Nutrients.KEYS[i]=="sodium")"limit"else "goal"}")
-            },
+            title = { Text("${Nutrients.NAMES[i]} target") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         text,
                         { text = it },
-                        label = { Text("Daily ${Nutrients.unit(i)}") },
+                        label = { Text("Daily ${v.repo.goalUnit(i)}") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
@@ -172,7 +214,10 @@ fun StatsScreen(v: TrackerViewModel) {
                             }
                         }
                     ) {
-                        Text("Clear goal")
+                        Text(
+                            if (v.repo.settings.has("nutrientProfile")) "Use profile reference"
+                            else "Clear custom target"
+                        )
                     }
                 }
             },

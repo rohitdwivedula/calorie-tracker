@@ -47,13 +47,22 @@ of 25 with Compose LazyColumn. Models are built in memory from database records;
 the UI is paginated rather than issuing a separate SQL query for each page.
 Legacy batch completion summaries are labeled as estimates, not invented meals.
 
-Stats shows per-nutrient daily averages and days meeting editable user goals for
-7- or 30-day windows, including today so far. Only days with actual intake entries
-count: a direct food, positive dish portion, or calorie-only record. Zero-calorie
-foods count too; saved foods, cooking, and inferred legacy dates do not.
-Missing-nutrient days are excluded from that nutrient's average and shown as unknown.
-Goals are current user-defined minimums, with sodium treated as an upper limit;
-they are not personalized RDAs. A logged day may still contain an incomplete food log.
+Stats defaults to **Today**, showing the calories, macros, vitamins and minerals
+recorded so far rather than an average. Partial known totals show ≥; entirely missing
+nutrients show —. **7 days** and **30 days** retain per-nutrient averages and reference
+coverage over logged days, including today so far. Zero-calorie foods count as logged
+days; saved foods/cooking do not. Missing-nutrient days are excluded per nutrient.
+
+Choose **Set reference profile** in Stats or **Settings → Nutrient references** once
+for automatic US adult (19+) age/sex-specific RDA/AI targets. Optional pregnancy/lactation
+rows cover ages 19–50. No demographics are assumed. Existing custom targets override
+references and can be reset individually to the profile value. Sodium uses a CDRR
+threshold/limit rather than an adequacy goal, and total fat shows an energy range rather
+than a made-up gram RDA. Reference targets are not safety upper limits. All history
+compares with the current profile; changing references does not change food/expenditure
+facts. The profile is included and validated in schema 4 backups, without a SQL migration.
+Reference values, units, scope and official sources are documented in
+[docs/nutrient-references.md](docs/nutrient-references.md).
 
 Energy balance offers Days (one calendar week, Sunday–Saturday by default), Weeks
 (eight weeks), and Months (one calendar year). Browse with arrows, jump using the

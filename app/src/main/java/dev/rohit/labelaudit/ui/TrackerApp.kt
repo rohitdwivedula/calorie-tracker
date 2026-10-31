@@ -112,6 +112,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "portion" -> "Set portion size"
             "food-edit" -> "Food nutrition"
             "settings" -> "Settings"
+            "nutrient-profile" -> "Nutrient references"
             "summary" -> "Energy balance"
             "energy" -> "Expenditure"
             "activity" -> "Activity calories"
@@ -194,6 +195,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                     "food-edit" -> FoodEditor(v)
                     "history" -> HistoryScreen(v)
                     "stats" -> StatsScreen(v)
+                    "nutrient-profile" -> NutrientProfileScreen(v)
                     "settings" ->
                         SettingsScreen(
                             v,
