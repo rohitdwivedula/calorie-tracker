@@ -1,39 +1,34 @@
-Compose migration — app 1.0.8, versionCode 10
-LOCAL ONLY. User approval is required before a release; no publication performed.
+Pending local update — app 1.0.9, versionCode 11
+User approval is required before any push/release publication.
 
-Implementation:
-- Main activity and all screen controls use Kotlin Jetpack Compose Material 3.
-- Shared dark theme, typography, shapes, surfaces and native Material components.
-- CameraX PreviewView uses AndroidView interop; camera controls are Compose.
-- Screens split into ui/ files; ViewModel/SavedStateHandle retain forms and drafts.
-- Existing Java persistence, barcode parsing, nutrient and accounting code retained
-  behind TrackerRepository/FoodLookup and tested pure BatchOperations.
-- Package ID, SQLite schema 3, backup schemas 1–3 and recorded facts preserved.
-- Old Java widget UI removed. Obsolete generic estimates-help popup removed.
-- AGENTS.md requires model co-author attribution for future AI-assisted commits.
+Changes:
+- New smiling rice-bowl launcher icon, generated with the built-in imagegen tool.
+- Original transparent PNG copied unchanged into drawable-nodpi/bowl_mascot.png.
+- Adaptive launcher foreground/background for API 26+, monochrome layer for 33+.
+- Final generation prompt and rendered preview documented in docs/icon/.
+- Calorie-only logs now expose When: date + 24-hour time picker, new or existing.
+- An edited eating time updates the same record; it does not duplicate intake.
+- Unchanged timestamps keep their precise original instant; future times rejected.
+- No database or backup schema change; quantities and nutrition facts preserved.
 
 Validation:
-- JDK 17, Kotlin/Compose compiler 2.0.21, AGP 8.7.3, Gradle 8.9, SDK 35.
-- assembleDebug, testDebugUnitTest, lintDebug passed. Warnings remain.
-- All 74 tests passed: existing core tests plus fact edits, saved navigation,
-  actual SQLite migration/restore/rollback and Compose interaction tests.
-- UI checks: home/cooking, activity recreation and draft retention, calorie log to
-  history, settings/stats and Back, quantity edit without duplicates, Ate and Finish.
-- Native-rendered previews inspected, including narrow-screen button readability.
-- Screenshot previews contain synthetic test data; no user records committed.
+- assembleDebug, testDebugUnitTest, lintDebug passed; warnings remain.
+- All 78 tests passed, zero failures/errors (74 existing, 4 new).
+- New checks: 1100 kcal moved from today to yesterday without duplicated records;
+  edits without a time change preserve the original instant; Compose When control
+  opens the date picker and saves the selected timestamp; adaptive and monochrome
+  resources load and render. Package-manager icon shadow cannot resolve adaptive
+  icons, so Android Resources loading and actual aapt manifest linkage were tested.
+- Compiled APK manifest references the new ic_launcher adaptive resource.
+- Rendered launcher icon and calorie editor previews inspected locally.
 - APK signature and 16 KB page zip alignment checks passed.
-- git diff --check passed.
+- git diff --check passed. No keys, databases or personal exports committed.
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 22802373
-SHA256: f989ea7e747e860ff00647746acb443e978ed72c7c2f73a239f013bc7bfcb282
+Bytes: 23371237
+SHA256: d82c5237afdc957c971d43e11a0c6d3e35fea101e6c64e94bd63ef1676870fe1
 
-Rendered review images: docs/screenshots/compose-today.png and compose-portion.png.
-Full generated images: app/build/outputs/compose-screenshots/.
-Robolectric SDK 34/native graphics: 411dp for general screens; 320dp for the dialog
-interaction flow because of known Robolectric issue #8460 (dialog text fields with
-wider width qualifiers). All dialog assertions remain active; no tests skipped.
-
-Limits: no connected Android phone or KVM emulator. Physical camera scanning,
-permission behavior on the Pixel, system document-picker UI and hardware rendering
-still need phone testing. Actual SQLite backup contents/round-trip were tested.
+Review files: docs/icon/launcher-preview.png,
+docs/screenshots/compose-calorie-time.png and docs/icon/README.md (prompt/source).
+Tests and previews use synthetic data. No physical phone testing was performed;
+launcher masking/themed behavior and system picker UX still need device testing.

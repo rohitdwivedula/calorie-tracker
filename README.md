@@ -23,6 +23,13 @@ preserved. Returning to the app refreshes the as-of calculations.
 Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
 Release publication always requires user approval.
 
+## App icon
+
+A smiling rice-bowl mascot is packaged as an adaptive launcher icon with Android
+13+ monochrome/themed support. The full-color art was generated with built-in
+imagegen and is bundled locally; no image requests happen at runtime. Source,
+prompt and rendered preview are documented in [docs/icon](docs/icon/README.md).
+
 ## Current interface
 
 The app uses a dark theme throughout. Today shows calories, protein and fiber;
@@ -66,7 +73,10 @@ nutrition is updated; rescan to obtain optional values for future ingredients.
 - **Quick log** opens the camera. Scan a barcode, enter a barcode manually, or use
   **Add calories** for a calorie-only record (for example, 120 kcal). These records
   have unknown macros; the summary labels macro totals as incomplete when relevant.
-  They can be edited/deleted in History. Saved foods are in the Foods tab. Lookup uses Open Food Facts. Review
+  They can be edited/deleted in History. The When control opens date and 24-hour
+  time pickers for both new and existing calorie-only logs. Backdating updates
+  the same record and moves its intake to the chosen day without duplication;
+  leaving the timestamp unchanged preserves its original instant. Saved foods are in the Foods tab. Lookup uses Open Food Facts. Review
   the product's nutrition basis and save; incomplete nutrition requires manual entry.
   Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
 - Scanned foods open a nutrition-label page, preferring the package serving size and

@@ -13,6 +13,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import java.time.*
 import org.json.*
 
@@ -22,6 +25,9 @@ fun CaloriesScreen(v: TrackerViewModel) {
         remember(v.selectedId) {
             if (v.selectedId.isEmpty()) null else v.record("calorie", v.selectedId)
         }
+    var showTime by remember { mutableStateOf(false) }
+    val recordedTime =
+        v.field("calories", "time", existing?.optLong("time")?.toString() ?: "").toLongOrNull()
     Page {
         Section("Just the calories", "Macros will remain unknown") {
             FormField(
@@ -33,6 +39,17 @@ fun CaloriesScreen(v: TrackerViewModel) {
                 true,
             )
             FormField(v, "calories", "name", "Name (optional)", existing?.optString("name") ?: "")
+            TextButton(
+                onClick = { showTime = true },
+                modifier = Modifier.semantics { contentDescription = "Edit eating time" },
+            ) {
+                Icon(Icons.Default.Schedule, null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (recordedTime == null) "When · now"
+                    else "When · " + whenText(recordedTime, v.repo.zone)
+                )
+            }
             Button(
                 onClick = {
                     v.run {
@@ -44,6 +61,7 @@ fun CaloriesScreen(v: TrackerViewModel) {
                                     existing?.optDouble("kcal")?.let(::fmt) ?: "",
                                 )
                                 .toDouble(),
+                            recordedTime,
                         )
                     }
                 },
@@ -58,4 +76,13 @@ fun CaloriesScreen(v: TrackerViewModel) {
                 Text("Delete log")
             }
     }
+    if (showTime)
+        TimestampDialog(
+            recordedTime ?: System.currentTimeMillis(),
+            v.repo.zone,
+            { showTime = false },
+        ) { time ->
+            v.field("calories", "time", time.toString(), true)
+            showTime = false
+        }
 }

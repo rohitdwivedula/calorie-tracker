@@ -115,4 +115,49 @@ class RepositoryIntegrationTest {
         assertEquals(910.0, r.intake(100, 200, 200)[0], 1e-9)
         r.db.close()
     }
+
+    @Test
+    fun backdatedCalorieEditMovesIntakeWithoutDuplicating() {
+        val v =
+            TrackerViewModel(
+                context as android.app.Application,
+                androidx.lifecycle.SavedStateHandle(),
+            )
+        v.saveCalories("Test meal", 1100.0)
+        val original = v.repo.db.list("calorie").single()
+        val id = original.getString("id")
+        val today = java.time.LocalDate.now(v.repo.zone)
+        val yesterday =
+            today.minusDays(1).atTime(21, 30).atZone(v.repo.zone).toInstant().toEpochMilli()
+        v.beginCalories(original)
+        v.saveCalories("Test meal", 1100.0, yesterday)
+        val updated = v.repo.db.list("calorie").single()
+        org.junit.Assert.assertEquals(id, updated.getString("id"))
+        org.junit.Assert.assertEquals(yesterday, updated.getLong("time"))
+        val now = System.currentTimeMillis() + 1
+        org.junit.Assert.assertEquals(0.0, v.repo.intake(v.repo.midnight(today), now, now)[0], 0.0)
+        org.junit.Assert.assertEquals(
+            1100.0,
+            v.repo.intake(v.repo.midnight(today.minusDays(1)), v.repo.midnight(today), now)[0],
+            0.0,
+        )
+        v.repo.db.close()
+    }
+
+    @Test
+    fun calorieEditWithoutTimeChangePreservesOriginalInstant() {
+        val v =
+            TrackerViewModel(
+                context as android.app.Application,
+                androidx.lifecycle.SavedStateHandle(),
+            )
+        val time = System.currentTimeMillis() - 3600000
+        v.saveCalories("Snack", 120.0, time)
+        v.beginCalories(v.repo.db.list("calorie").single())
+        v.saveCalories("Snack corrected", 150.0)
+        val record = v.repo.db.list("calorie").single()
+        org.junit.Assert.assertEquals(time, record.getLong("time"))
+        org.junit.Assert.assertEquals(150.0, record.getDouble("kcal"), 0.0)
+        v.repo.db.close()
+    }
 }

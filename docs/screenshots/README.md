@@ -5,6 +5,7 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 
 - [Today](compose-today.png)
 - [Portion entry](compose-portion.png)
+- [Calorie log date/time](compose-calorie-time.png)
 
 The portion/complete-flow test uses a 320dp display profile to avoid the documented
 Robolectric dialog-with-text-field issue #8460. Other screen tests use a 411dp profile.

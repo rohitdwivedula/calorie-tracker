@@ -144,4 +144,38 @@ class ComposeFlowTest {
             )
         }
     }
+
+    @Test
+    fun calorieLogHasEditableEatingTime() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.beginCalories()
+        }
+        ui.onNodeWithContentDescription("Edit eating time").assertIsDisplayed().performClick()
+        ui.onNodeWithText("Next").assertIsDisplayed()
+        ui.onNodeWithText("Cancel").performClick()
+        ui.onNodeWithText("Calories (kcal)").performTextInput("1100")
+        ui.onNodeWithText("Name (optional)").performTextInput("Test meal")
+        var expected = 0L
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            expected =
+                java.time.LocalDate.now(v.repo.zone)
+                    .minusDays(1)
+                    .atTime(21, 30)
+                    .atZone(v.repo.zone)
+                    .toInstant()
+                    .toEpochMilli()
+            v.field("calories", "time", expected.toString(), true)
+        }
+        screenshot("calorie-time")
+        ui.onNodeWithText("Save").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(
+                expected,
+                v.repo.db.list("calorie").single().getLong("time"),
+            )
+        }
+    }
 }

@@ -359,10 +359,14 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         go("calories")
     }
 
-    fun saveCalories(name: String, kcal: Double) {
+    fun saveCalories(name: String, kcal: Double, time: Long? = null) {
         val d =
             if (selectedId.isEmpty()) JSONObject().put("time", System.currentTimeMillis())
             else record("calorie", selectedId)
+        if (time != null) {
+            require(time <= System.currentTimeMillis()) { "Eating time cannot be in the future" }
+            d.put("time", time)
+        }
         d.put("name", name).put("kcal", kcal)
         repo.db.save("calorie", d)
         home()
