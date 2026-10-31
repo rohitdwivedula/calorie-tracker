@@ -25,14 +25,12 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
     val now = remember(revision) { System.currentTimeMillis() }
     val today = LocalDate.now(r.zone)
     val start = maxOf(r.midnight(today), r.midnight(LocalDate.parse(r.settings.getString("start"))))
-    val week =
-        maxOf(
-            r.midnight(today.minusDays((today.dayOfWeek.value % 7).toLong())),
-            r.midnight(LocalDate.parse(r.settings.getString("start"))),
-        )
     val totals = remember(revision) { r.nutrientTotals(start, now, now) }
-    val daily = r.expenditure(start, now) - totals.values[0]
-    val weekly = r.expenditure(week, now) - r.intake(week, now, now)[0]
+    val history = remember(revision) { LoggedHistory(r, now) }
+    val dailySummary = history.summary(today, today.plusDays(1))
+    val weeklySummary = history.summary(LoggedHistory.sunday(today), today.plusDays(1))
+    val daily = dailySummary.deficit()
+    val weekly = weeklySummary.deficit()
     val batches = remember(revision) { r.db.list("batch").filter { it.isNull("completed") } }
     Page {
         Section(today.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))) {
@@ -78,21 +76,23 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit) {
                 )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Card(Modifier.weight(1f)) {
+            Card(onClick = { v.go("summary") }, Modifier.weight(1f)) {
                 Column(Modifier.padding(16.dp)) {
                     Metric(
                         "Today's ${if(daily>=0)"deficit" else "surplus"}",
-                        "${kcal(kotlin.math.abs(daily))} kcal",
-                        "Estimated so far",
+                        if (dailySummary.loggedDays == 0) "—"
+                        else "${kcal(kotlin.math.abs(daily))} kcal",
+                        if (dailySummary.loggedDays == 0) "No intake logged" else "Estimated so far",
                     )
                 }
             }
-            Card(Modifier.weight(1f)) {
+            Card(onClick = { v.go("summary") }, Modifier.weight(1f)) {
                 Column(Modifier.padding(16.dp)) {
                     Metric(
                         "Weekly ${if(weekly>=0)"deficit" else "surplus"}",
-                        "${kcal(kotlin.math.abs(weekly))} kcal",
-                        "Est. Sunday–now",
+                        if (weeklySummary.loggedDays == 0) "—"
+                        else "${kcal(kotlin.math.abs(weekly))} kcal",
+                        "Est. · ${weeklySummary.loggedDays}/7 days logged",
                     )
                 }
             }

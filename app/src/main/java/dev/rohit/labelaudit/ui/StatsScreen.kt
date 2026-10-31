@@ -27,25 +27,9 @@ fun StatsScreen(v: TrackerViewModel) {
     var goalIndex by rememberSaveable { mutableIntStateOf(-1) }
     val days =
         remember(period, v.revision) {
-            val today = LocalDate.now(v.repo.zone)
-            val start =
-                maxOf(
-                    today.minusDays(period.toLong()),
-                    LocalDate.parse(v.repo.settings.getString("start")),
-                )
-            buildList {
-                var day = start
-                while (day < today) {
-                    add(
-                        v.repo.nutrientTotals(
-                            v.repo.midnight(day),
-                            v.repo.midnight(day.plusDays(1)),
-                            System.currentTimeMillis(),
-                        )
-                    )
-                    day = day.plusDays(1)
-                }
-            }
+            val history = LoggedHistory(v.repo, System.currentTimeMillis())
+            val start = history.today.minusDays(period.toLong() - 1)
+            history.days.tailMap(start, true).values.map { it.nutrition }
         }
     val range =
         when (group) {
@@ -59,6 +43,13 @@ fun StatsScreen(v: TrackerViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
+            TextButton(onClick = { v.go("summary") }) {
+                Icon(Icons.Default.BarChart, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Energy balance")
+            }
+        }
+        item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(7, 30).forEach { p ->
                     FilterChip(
@@ -71,7 +62,7 @@ fun StatsScreen(v: TrackerViewModel) {
         }
         item {
             Text(
-                "${days.size} completed tracking days · today excluded",
+                "${days.size}/$period days logged · includes today so far",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -88,7 +79,7 @@ fun StatsScreen(v: TrackerViewModel) {
                 EmptyState(
                     Icons.Default.BarChart,
                     "A little more history",
-                    "Daily averages start after your first full tracking day.",
+                    "Log a food or portion to start your daily averages.",
                 )
             }
         items(range.toList(), key = { it }) { i ->

@@ -11,24 +11,36 @@ Changes:
 - Unchanged timestamps keep their precise original instant; future times rejected.
 - No database or backup schema change; quantities and nutrition facts preserved.
 
+Additional changes:
+- Days / Weeks / Months energy-balance charts; Sunday-default calendar weeks,
+  arrows/date jump, scrollable wider charts, selected-bar totals and food-log filter.
+- Only dates with actual intake records count for totals, expenditure and averages.
+  Zero-calorie foods count; saved foods/cooking/inferred dates do not. Coverage shown.
+- Today counts so far, with accrued expenditure; historical effective rates preserved.
+- Stats includes today, excludes empty dates, preserves missing-nutrient handling.
+- History dish portions open ingredient quantities and kcal/protein/fiber contributions,
+  scaled to the selected percentage, with whole-dish toggle and separate portion edit.
+- No recorded facts, database schema or backup formats changed.
+
 Validation:
-- assembleDebug, testDebugUnitTest, lintDebug passed; warnings remain.
-- All 78 tests passed, zero failures/errors (74 existing, 4 new).
-- New checks: 1100 kcal moved from today to yesterday without duplicated records;
-  edits without a time change preserve the original instant; Compose When control
-  opens the date picker and saves the selected timestamp; adaptive and monochrome
-  resources load and render. Package-manager icon shadow cannot resolve adaptive
-  icons, so Android Resources loading and actual aapt manifest linkage were tested.
-- Compiled APK manifest references the new ic_launcher adaptive resource.
-- Rendered launcher icon and calorie editor previews inspected locally.
+- assembleDebug, testDebugUnitTest and lintDebug passed; existing warnings remain.
+- All 86 tests passed, zero failures/errors/skips (78 prior, 8 new).
+- New accounting checks cover eligible dates, zero-calorie foods, no phantom deficits,
+  partial today, tracking start, future records, historical expenditure changes,
+  25-hour DST day, week/month boundaries, exact portion/finish totals and legacy labels.
+- New Compose checks cover Days/Weeks/Months, bar selection, intake toggle,
+  filtered food-log navigation and portion-to-whole ingredient contribution switch.
+- Prior icon/timestamp tests remain passing; no physical-phone testing performed.
 - APK signature and 16 KB page zip alignment checks passed.
-- git diff --check passed. No keys, databases or personal exports committed.
+- APK package dev.rohit.labelaudit, version 1.0.9 / versionCode 11.
+- No keys, local configuration, databases, private exports or raw user lookups committed.
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 23371237
-SHA256: d82c5237afdc957c971d43e11a0c6d3e35fea101e6c64e94bd63ef1676870fe1
+Bytes: 23650378
+SHA256: 3cfd4d8018f1f23f4ceef280cdc13954483d4f64fa7c1ad4a68fc850b13e940e
 
-Review files: docs/icon/launcher-preview.png,
-docs/screenshots/compose-calorie-time.png and docs/icon/README.md (prompt/source).
-Tests and previews use synthetic data. No physical phone testing was performed;
-launcher masking/themed behavior and system picker UX still need device testing.
+Review: docs/screenshots/compose-balance-days.png, compose-balance-weeks.png,
+compose-balance-months.png and compose-dish-portion-details.png. All use synthetic
+records and native Robolectric rendering. docs/icon/ contains the generated icon.
+Camera hardware, device permissions, launcher masking and system picker UX still
+need Pixel testing. No release has been published for this pending update.

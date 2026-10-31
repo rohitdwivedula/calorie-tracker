@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -22,7 +23,21 @@ import org.json.*
 fun DetailsScreen(v: TrackerViewModel) {
     val b = remember(v.selectedId, v.revision) { v.record(v.selectedKind, v.selectedId) }
     val r = v.repo
-    val totals = r.batchNutrients(b, 1.0)
+    val selectedPortion = v.field("details", "portionId", "")
+    val events = b.optJSONArray("eatingEvents")
+    val portionIndex =
+        (0 until (events?.length() ?: 0)).firstOrNull {
+            events!!.getJSONObject(it).getString("id") == selectedPortion
+        }
+    var whole by
+        rememberSaveable(b.getString("id"), selectedPortion) {
+            mutableStateOf(selectedPortion.isEmpty())
+        }
+    val fraction =
+        if (!whole && portionIndex != null)
+            events!!.getJSONObject(portionIndex).getDouble("fraction")
+        else if (v.selectedKind == "direct") b.getDouble("share") else 1.0
+    val totals = r.batchNutrients(b, fraction)
     var timeField by remember { mutableStateOf<String?>(null) }
     val start = v.field("details", "start", b.getLong("available").toString()).toLong()
     val completion =
@@ -34,8 +49,23 @@ fun DetailsScreen(v: TrackerViewModel) {
             .toLongOrNull()
     Page {
         Section(b.optString("name")) {
+            if (portionIndex != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!whole, { whole = false }, label = { Text("This portion") })
+                    FilterChip(whole, { whole = true }, label = { Text("Whole dish") })
+                }
+                Text(
+                    "${fmt(events!!.getJSONObject(portionIndex).getDouble("fraction") * 100)}% · ${whenText(events.getJSONObject(portionIndex).getLong("time"), r.zone)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { v.eventEdit = b.getString("id") to portionIndex }) {
+                    Text("Edit portion")
+                }
+            }
             InfoRow(
-                "Whole ${if(v.selectedKind=="batch")"dish"else "food"}",
+                if (!whole && portionIndex != null) "This portion"
+                else if (v.selectedKind == "direct") "Logged food" else "Whole dish",
                 r.nutrientText(totals, 0),
             )
             InfoRow("Protein", r.nutrientText(totals, 1))
@@ -46,10 +76,28 @@ fun DetailsScreen(v: TrackerViewModel) {
                 val ingredients = b.getJSONArray("ingredients")
                 for (i in 0 until ingredients.length()) {
                     val x = ingredients.getJSONObject(i)
-                    InfoRow(
-                        x.getJSONObject("food").optString("name"),
-                        "${fmt(x.getDouble("quantity"))} ${x.getJSONObject("food").optString("unit")}",
-                    )
+                    val food = x.getJSONObject("food")
+                    val contribution =
+                        Nutrients.Total().apply {
+                            add(
+                                r.nutrientValues(food),
+                                fraction * x.getDouble("quantity") / food.getDouble("basis"),
+                            )
+                        }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(food.optString("name"), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "${fmt(x.getDouble("quantity") * fraction)} ${food.optString("unit")} · ${if (fraction == 1.0) "whole dish" else "in this portion"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "${r.nutrientText(contribution, 0)} · Protein ${r.nutrientText(contribution, 1)} · Fiber ${r.nutrientText(contribution, 4)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (i < ingredients.length() - 1) HorizontalDivider()
                 }
                 TextButton(onClick = { v.beginCook(b) }) { Text("Edit ingredients") }
             }
@@ -89,7 +137,6 @@ fun DetailsScreen(v: TrackerViewModel) {
                 Text("Save corrections")
             }
         }
-        val events = b.optJSONArray("eatingEvents")
         if (events != null && events.length() > 0)
             Section("Recorded portions") {
                 for (i in 0 until events.length()) {

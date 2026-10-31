@@ -48,11 +48,30 @@ the UI is paginated rather than issuing a separate SQL query for each page.
 Legacy batch completion summaries are labeled as estimates, not invented meals.
 
 Stats shows per-nutrient daily averages and days meeting editable user goals for
-7 or 30 completed tracking days. Today is excluded. Missing-nutrient days are
-excluded from that nutrient's average and shown as unknown, not failed goal days.
+7- or 30-day windows, including today so far. Only days with actual intake entries
+count: a direct food, positive dish portion, or calorie-only record. Zero-calorie
+foods count too; saved foods, cooking, and inferred legacy dates do not.
+Missing-nutrient days are excluded from that nutrient's average and shown as unknown.
 Goals are current user-defined minimums, with sodium treated as an upper limit;
-they are not personalized RDAs. An unlogged day contributes zero recorded intake,
-so these stats describe the recorded log, not all food someone might have eaten.
+they are not personalized RDAs. A logged day may still contain an incomplete food log.
+
+Energy balance offers Days (one calendar week, Sunday–Saturday by default), Weeks
+(eight weeks), and Months (one calendar year). Browse with arrows, jump using the
+range/date picker, or scroll the wider charts. Tap a bar to select its period and
+use View food log to inspect its entries. Toggle intake/deficit; surplus bars extend
+below zero. Coverage always shows logged days versus calendar days in the range.
+Averages and intake/expenditure/balance totals include only logged days. Today's
+expenditure accrues through the same as-of instant; historical days use their effective
+expenditure rates and full local calendar days, including daylight-saving transitions.
+Empty days do not generate a deficit. The full-week target is separate.
+`LoggedHistory` is a rebuildable calculation over the existing authoritative records;
+no schema change or stored inferred history is needed. Legacy linear allocations can
+contribute on eligible dates and are labeled when present; they never establish
+new logged dates by themselves.
+
+Tapping a dish portion in History opens its ingredient contributions, scaled to
+that recorded percentage, with a Whole dish toggle. Calories, protein, fiber and
+ingredient quantities use the saved snapshots. Edit portion remains a separate action.
 
 Lookup and manual entry now support optional fiber, vitamins A/C/D/E/K/B1/B2/B3/
 B6/B9/B12 and calcium, iron, magnesium, potassium, zinc, selenium and sodium.
@@ -66,8 +85,10 @@ nutrition is updated; rescan to obtain optional values for future ingredients.
 
 - Home shows three tiles: today’s estimated intake, today’s estimated deficit/surplus,
   and estimated weekly deficit/surplus from Sunday through now.
-- The chart icon on Today opens cumulative balance, macros, previous weeks and targets.
-  The detailed weekly view follows your configurable week-start setting; the home tile always starts Sunday.
+- Tap a home balance tile, the chart icon, or Energy balance in Stats for period
+  charts, logged-day averages, food-log drill-down and cumulative balance. Charts
+  default to Sunday weeks and honor the configurable week-start setting; the home
+  weekly tile always starts Sunday.
 - Set your own expenditure in **Settings (gear icon)**. Initial assumption is explicitly
   2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
 - **Quick log** opens the camera. Scan a barcode, enter a barcode manually, or use

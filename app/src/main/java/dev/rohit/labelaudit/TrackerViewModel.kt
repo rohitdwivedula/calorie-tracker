@@ -318,10 +318,11 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         home()
     }
 
-    fun detail(kind: String, id: String) {
+    fun detail(kind: String, id: String, portionId: String = "") {
         selectedKind = kind
         selectedId = id
         clearForm("details")
+        field("details", "portionId", portionId, true)
         go("details")
     }
 

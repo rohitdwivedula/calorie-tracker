@@ -77,6 +77,92 @@ class ComposeFlowTest {
         ui.onNodeWithText("New dish").assertIsDisplayed()
     }
 
+    @Test
+    fun balancePeriodsAreSelectableAndOpenTheirFoodLog() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val time = System.currentTimeMillis() - 60000
+            v.repo.db.save(
+                "calorie",
+                org.json
+                    .JSONObject()
+                    .put("id", "chart-meal")
+                    .put("name", "Chart meal")
+                    .put("time", time)
+                    .put("kcal", 450),
+            )
+            v.refresh()
+            v.go("summary")
+        }
+        ui.onNodeWithText("Days").assertIsDisplayed()
+        ui.onNodeWithText("Average daily intake").assertExists()
+        screenshot("balance-days")
+        val day = java.time.LocalDate.now().toString()
+        ui.onNodeWithContentDescription("$day:", substring = true).performClick()
+        ui.onNodeWithText("1/1 days logged · today so far").assertExists()
+        ui.onNode(hasText("Intake") and hasClickAction()).performClick()
+        ui.onNodeWithText("450 kcal").assertExists()
+        ui.onNodeWithText("Deficit").performClick()
+        ui.onNodeWithText("Weeks").performClick()
+        screenshot("balance-weeks")
+        ui.onNodeWithText("Months").performClick()
+        screenshot("balance-months")
+        ui.onNodeWithText("View food log").performScrollTo().performClick()
+        ui.onNodeWithText("Chart meal").assertIsDisplayed()
+        ui.onNodeWithText("Show all history").assertIsDisplayed()
+        ui.onNodeWithContentDescription("Back").performClick()
+        ui.onNodeWithText("Energy balance").assertIsDisplayed()
+    }
+
+    @Test
+    fun historyPortionShowsScaledIngredientContributionsBeforeEditing() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val time = System.currentTimeMillis() - 60000
+            val food =
+                org.json
+                    .JSONObject()
+                    .put("id", "detail-food")
+                    .put("name", "Synthetic seitan")
+                    .put("basis", 100)
+                    .put("unit", "g")
+                    .put("kcal", 200)
+                    .put("protein", 25)
+                    .put("fiber", 6)
+                    .put("carbs", 10)
+                    .put("fat", 2)
+            val b =
+                org.json
+                    .JSONObject()
+                    .put("id", "detail-dish")
+                    .put("name", "Seitan pasta")
+                    .put("available", time - 60000)
+                    .put("completed", org.json.JSONObject.NULL)
+                    .put("share", 1)
+                    .put("portionTracking", true)
+                    .put(
+                        "ingredients",
+                        org.json
+                            .JSONArray()
+                            .put(org.json.JSONObject().put("food", food).put("quantity", 300)),
+                    )
+            v.repo.db.save("batch", BatchOperations.record(b, .3, time, "ate"))
+            v.refresh()
+            v.go("history")
+        }
+        ui.onNodeWithText("Seitan pasta").performClick()
+        ui.onNodeWithText("Edit portion").assertIsDisplayed()
+        ui.onNodeWithText("180 kcal").assertExists()
+        ui.onNodeWithText("Synthetic seitan").assertIsDisplayed()
+        ui.onNodeWithText("90 g · in this portion").assertIsDisplayed()
+        screenshot("dish-portion-details")
+        ui.onNodeWithText("Whole dish").performClick()
+        ui.onNodeWithText("600 kcal").assertExists()
+        ui.onNodeWithText("300 g · whole dish").assertIsDisplayed()
+        ui.onNodeWithContentDescription("Back").performClick()
+        ui.onNodeWithText("Seitan pasta").assertIsDisplayed()
+    }
+
     // Robolectric #8460: dialogs with text input loop with width qualifiers above 320dp.
     // Keep the interaction test on its supported profile; other screenshots use 411dp.
     @Config(qualifiers = "w320dp-h891dp-xhdpi")

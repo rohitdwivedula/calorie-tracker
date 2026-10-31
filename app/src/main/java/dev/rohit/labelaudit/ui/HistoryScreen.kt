@@ -31,8 +31,10 @@ private data class FoodLog(
 
 @Composable
 fun HistoryScreen(v: TrackerViewModel) {
+    val from = v.field("history", "from", "").toLongOrNull()
+    val until = v.field("history", "until", "").toLongOrNull()
     val logs =
-        remember(v.revision) {
+        remember(v.revision, from, until) {
             buildList<FoodLog> {
                     v.repo.db.list("batch").forEach { b ->
                         val events = b.optJSONArray("eatingEvents")
@@ -84,6 +86,7 @@ fun HistoryScreen(v: TrackerViewModel) {
                         )
                     }
                 }
+                .filter { (from == null || it.time >= from) && (until == null || it.time < until) }
                 .sortedWith(compareByDescending<FoodLog> { it.time }.thenBy { it.key })
         }
     var limit by rememberSaveable { mutableIntStateOf(25) }
@@ -101,6 +104,8 @@ fun HistoryScreen(v: TrackerViewModel) {
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (from != null)
+            item { TextButton(onClick = { v.clearForm("history") }) { Text("Show all history") } }
         if (logs.isEmpty())
             item {
                 EmptyState(
@@ -141,7 +146,14 @@ fun HistoryScreen(v: TrackerViewModel) {
                         onClick = {
                             if (item.kind == "calorie") v.beginCalories(item.record)
                             else if (item.portion >= 0)
-                                v.eventEdit = item.record.getString("id") to item.portion
+                                v.detail(
+                                    "batch",
+                                    item.record.getString("id"),
+                                    item.record
+                                        .getJSONArray("eatingEvents")
+                                        .getJSONObject(item.portion)
+                                        .getString("id"),
+                                )
                             else
                                 v.detail(
                                     if (item.kind == "legacy") "batch" else item.kind,
