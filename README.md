@@ -2,7 +2,26 @@
 
 Local-first batch nutrition tracking for a personal ARM64 Android phone (Android 8+).
 Create foods, add ingredient quantities to a named dish, then tap **Finished** when
-it is gone. No cooked weight, meal categories, portions, account, OCR, or backend.
+it is gone. No cooked weight, meal categories, pre-portioned containers, account, OCR, or backend.
+
+## Compose UI
+
+The application UI is Kotlin Jetpack Compose with Material 3: shared dark color
+scheme, typography, component shapes, scaffold, navigation bar, cards, fields,
+sliders, chips, dialogs and date/time controls. The XML theme configures only the
+host window. CameraX PreviewView uses AndroidView interop; camera actions are Compose.
+The old Java widget activity has been removed.
+Rendered test previews are in [docs/screenshots](docs/screenshots/README.md).
+
+`TrackerViewModel` keeps navigation and form/draft state in SavedStateHandle.
+Screens and shared components are split under `ui/`. `TrackerRepository` contains
+the existing Java accounting/persistence queries, `FoodLookup` handles explicit
+archived API lookup, and `BatchOperations` edits recorded facts without UI code.
+Database schema 3, backup schemas 1–3, package identity and nutrition snapshots are
+preserved. Returning to the app refreshes the as-of calculations.
+
+Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
+Release publication always requires user approval.
 
 ## Current interface
 
@@ -17,7 +36,7 @@ quarter-serving steps; type quantities above 8 or below 1 when needed.
 History combines logged dish portions, quick foods and calorie-only entries into a
 newest-first timeline. Each tile has a date group, 24-hour time, name, dish share
 where applicable, calories, protein and fiber. Scrolling loads more rows in batches
-of 25 with a recycled ListView. Models are built in memory from database records;
+of 25 with Compose LazyColumn. Models are built in memory from database records;
 the UI is paginated rather than issuing a separate SQL query for each page.
 Legacy batch completion summaries are labeled as estimates, not invented meals.
 
@@ -40,22 +59,22 @@ nutrition is updated; rescan to obtain optional values for future ingredients.
 
 - Home shows three tiles: today’s estimated intake, today’s estimated deficit/surplus,
   and estimated weekly deficit/surplus from Sunday through now.
-- More → Nutrition details contains cumulative balance, macros, previous weeks and targets.
+- The chart icon on Today opens cumulative balance, macros, previous weeks and targets.
   The detailed weekly view follows your configurable week-start setting; the home tile always starts Sunday.
-- Set your own expenditure in **Settings & backup**. Initial assumption is explicitly
+- Set your own expenditure in **Settings (gear icon)**. Initial assumption is explicitly
   2000 kcal/day. Set tracking start, weekly deficit goal, week start and expected duration.
 - **Quick log** opens the camera. Scan a barcode, enter a barcode manually, or use
   **Add calories** for a calorie-only record (for example, 120 kcal). These records
   have unknown macros; the summary labels macro totals as incomplete when relevant.
-  They can be edited/deleted in History. Saved foods are under More. Lookup uses Open Food Facts. Review
+  They can be edited/deleted in History. Saved foods are in the Foods tab. Lookup uses Open Food Facts. Review
   the product's nutrition basis and save; incomplete nutrition requires manual entry.
   Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
 - Scanned foods open a nutrition-label page, preferring the package serving size and
   per-serving nutrient fields from Open Food Facts. Values are rounded for display;
   calculations retain their precision. Choose servings, grams or milliliters with a
   slider and editable quantity; selected calories/macros update live. The dark portion
-  page puts controls first, with a macro calorie split and nutrition rows below;
-  Cancel/Save remain fixed at the bottom. Grams/volume
+  page puts controls first, with nutrition rows below;
+  the confirmation action remains fixed at the bottom and Back returns to the previous screen. Grams/volume
   controls appear only with an explicit per-serving conversion. No ml-to-g assumption.
 - Explicit g/ml amounts in serving-size text take precedence over structured unit
   metadata (which can conflict). Ambiguous fractions/decimal-comma text require a
@@ -70,7 +89,7 @@ nutrition is updated; rescan to obtain optional values for future ingredients.
   name and ingredients are retained while scanning/adding foods. Availability defaults
   to the time you save; Change start time is an optional date/time picker.
   Each ingredient retains a complete nutrition snapshot.
-  Edit ingredient quantities by removing and adding the ingredient again.
+  Tap an ingredient to correct its quantity without adding a duplicate.
 - **Ate** asks for a share of the whole dish. A slider snaps to common amounts
   (10%, ¼, ⅓, ½, ⅔, ¾, and the remaining share); a percentage field accepts finer
   amounts. Nutrition for every ingredient is scaled together. Exact thirds remain
@@ -152,9 +171,9 @@ week-to-date, never an achieved full-week goal.
 
 ## Backup and privacy
 
-**Settings & backup → Export** writes a portable UTF-8 JSON file with backup schema 3
+**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 3
 (restore also accepts schemas 1 and 2) and
-and authoritative records/settings using Android's document picker. **Restore** validates
+authoritative records/settings using Android's document picker. **Restore** validates
 types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
 replacement. It replaces ALL tracker data after confirmation; it does not merge.
 Repeated restoration cannot duplicate records. Export first to preserve current data.
@@ -177,7 +196,7 @@ build tools 35.0.0, command-line tools and Gradle's cache. Run:
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`. Debug signing is generated locally;
-no keys are committed. Java 17, Gradle 8.9, AGP 8.7.3, native Android views, CameraX,
+no keys are committed. Java 17, Kotlin 2.0.21, Gradle 8.9, AGP 8.7.3, Compose Material 3, CameraX,
 bundled ML Kit barcode scanner. No OCR dependency.
 
 For another Linux x86_64 machine, install a JDK 17 at `.android-toolchain/jdk` and
@@ -194,11 +213,18 @@ printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
 Alternatively set Java/SDK paths normally and run `./gradlew :app:assembleDebug :app:testDebugUnitTest`.
 Network access is required for initial dependency downloads. Android Studio is optional.
 
-## Validation limits
+## Validation
 
-Automated tests cover barcode extraction, legacy allocation clipping/reconciliation, explicit portion limits and remaining
-shares, navigation history, weekly boundaries, instantaneous records, invalid
-intervals, DST, expenditure
-start dates and effective-date changes. Build/lint results are recorded in
-`BUILD_REPORT.txt`. Camera behavior, SQLite/backup document-picker flows and usability
-still need physical-device testing; this environment has no connected Android device.
+The test suite includes pure accounting/barcode/nutrient tests, actual SQLite
+upgrade and backup round-trip tests under Robolectric, and Compose interaction
+tests for navigation, activity recreation, calorie logging, ingredient editing,
+portion entry and completion. No network API calls are needed by these tests.
+
+Compose previews are rendered through Robolectric's native graphics mode using
+synthetic test data; they are not physical-device screenshots. Generated images
+are under `app/build/outputs/compose-screenshots/`. The dialog flow uses a 320dp
+profile because of Robolectric issue #8460; other screen checks use 411dp.
+
+Camera hardware, permission UX on the Pixel and the system document picker still
+need physical-device testing. Local build and APK validation results are recorded
+in BUILD_REPORT.txt.

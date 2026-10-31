@@ -6,6 +6,18 @@ import org.junit.Test;
 
 public class NavigationTest {
   @Test
+  public void savedRoutesRestoreBackNavigation() {
+    Navigation<String> first = new Navigation<>();
+    first.show("Today", "cook", "Today");
+    first.show("cook", "portion", "cook");
+    Navigation<String> restored = new Navigation<>();
+    restored.restore(first.routes(), route -> route);
+    assertEquals("cook", restored.back().route);
+    assertEquals("Today", restored.back().route);
+    assertFalse(restored.canGoBack());
+  }
+
+  @Test
   public void backTraversesIngredientFlow() {
     Navigation<String> n = new Navigation<>();
     n.show(null, "Today", null);

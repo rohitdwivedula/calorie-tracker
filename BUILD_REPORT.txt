@@ -1,58 +1,39 @@
-App 1.0.7, versionCode 9 — approved for GitHub release v0.1.7
-User authorized publishing the APK and enriched backup together.
+Compose migration — app 1.0.8, versionCode 10
+LOCAL ONLY. User approval is required before a release; no publication performed.
 
-Changes:
-- Dark application theme, dialogs, forms and system bars.
-- Portion slider spans 1–8 servings in quarter-serving steps. Text accepts larger
-  quantities and fractional servings. Calories and macros update live.
-- Add ingredient launches camera directly with Saved foods/Manual food fallbacks.
-  Camera cancellation returns to the dish. Save dish renamed Done cooking.
-- History combines actual dish-portion events, direct foods and calorie-only logs,
-  newest first, with date groups, HH:mm times, named tiles and kcal/protein/fiber.
-  Legacy completion entries are labeled estimates. ListView recycles visible rows;
-  UI loads 25 more entries as needed. Record models are assembled in memory from
-  authoritative SQLite documents before pagination; this is not a SQL cursor feed.
-- Today card displays calories, protein and fiber with coverage/goal information.
-- Stats: last 7/30 completed tracked days, per-nutrient daily averages, editable
-  daily minimum goals (sodium is a maximum), days met and unknown-day counts.
-  These are user targets, not personalized RDAs. Averages and goal counts exclude
-  days with missing values for that nutrient; today is excluded.
-- OFF lookup retains optional fiber, vitamins and minerals using normalized gram
-  fields; displayed micronutrients convert to mg/µg. Optional manual correction.
-  Existing snapshots stay unchanged. Missing values are not silently made zero.
-- Goals and optional nutrients remain in authoritative JSON database documents
-  and are included in portable backups. No derived caches or extra uploads.
+Implementation:
+- Main activity and all screen controls use Kotlin Jetpack Compose Material 3.
+- Shared dark theme, typography, shapes, surfaces and native Material components.
+- CameraX PreviewView uses AndroidView interop; camera controls are Compose.
+- Screens split into ui/ files; ViewModel/SavedStateHandle retain forms and drafts.
+- Existing Java persistence, barcode parsing, nutrient and accounting code retained
+  behind TrackerRepository/FoodLookup and tested pure BatchOperations.
+- Package ID, SQLite schema 3, backup schemas 1–3 and recorded facts preserved.
+- Old Java widget UI removed. Obsolete generic estimates-help popup removed.
+- AGENTS.md requires model co-author attribution for future AI-assisted commits.
 
 Validation:
-- JDK 17 / Gradle 8.9 / AGP 8.7.3 / Android SDK 35.
-- assembleDebug, testDebugUnitTest and lintDebug passed (lint warnings remain).
-- 59 tests passed, zero failures/errors. Added tests cover missing vs zero nutrient
-  values, partial coverage, complete-day averages, units, limits and slider range.
+- JDK 17, Kotlin/Compose compiler 2.0.21, AGP 8.7.3, Gradle 8.9, SDK 35.
+- assembleDebug, testDebugUnitTest, lintDebug passed. Warnings remain.
+- All 74 tests passed: existing core tests plus fact edits, saved navigation,
+  actual SQLite migration/restore/rollback and Compose interaction tests.
+- UI checks: home/cooking, activity recreation and draft retention, calorie log to
+  history, settings/stats and Back, quantity edit without duplicates, Ate and Finish.
+- Native-rendered previews inspected, including narrow-screen button readability.
+- Screenshot previews contain synthetic test data; no user records committed.
 - APK signature and 16 KB page zip alignment checks passed.
 - git diff --check passed.
 
 APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 8545963
-SHA256: d0b7741fe7969e1ecb6b7e59c405c66c464f922d41f2ff7a8e811874ad78d8dd
+Bytes: 22802373
+SHA256: f989ea7e747e860ff00647746acb443e978ed72c7c2f73a239f013bc7bfcb282
 
-Limits: no Android device attached. Theme/layout, OS gestures, camera permissions,
-large-history scrolling, SQLite lifecycle and backup/restore need phone testing.
-Old ingredient snapshots may lack fiber/vitamins; rescan and save for future use,
-or explicitly edit a batch ingredient. Historical snapshots are not overwritten.
-The enriched backup is attached only as an explicitly requested release asset;
-exports, databases, signing keys and personal data remain excluded from Git.
+Rendered review images: docs/screenshots/compose-today.png and compose-portion.png.
+Full generated images: app/build/outputs/compose-screenshots/.
+Robolectric SDK 34/native graphics: 411dp for general screens; 320dp for the dialog
+interaction flow because of known Robolectric issue #8460 (dialog text fields with
+wider width qualifiers). All dialog assertions remain active; no tests skipped.
 
-User-supplied backup enrichment prepared outside Git and validated using the app
-Data.validate method, including nested snapshots. Original fields preserved.
-Requested backup release asset is listed in ignored pending-release-assets.json;
-no personal data or export files are committed. Publication approved by user for v0.1.7.
-
-Raw response archive update (included in this approved release):
-- SQLite schema 3 adds a separate lookup table; food/snapshots retain references.
-- Complete JSON text, barcode, URL, retrieval time and checksum are preserved.
-- Backup schema 3 includes responses; older schemas 1/2 remain supported.
-- Tests cover unknown-field/Unicode preservation, JSON round-trip, checksums,
-  missing/mismatched refs, duplicate IDs, size limits and old unreferenced foods.
-- Actual migration table SQL was exercised with SQLite; existing records preserved.
-- Enriched private backup validated against actual app record/reference validators.
-- Final build, all 59 unit tests, lint, APK signature and alignment checks passed.
+Limits: no connected Android phone or KVM emulator. Physical camera scanning,
+permission behavior on the Pixel, system document-picker UI and hardware rendering
+still need phone testing. Actual SQLite backup contents/round-trip were tested.

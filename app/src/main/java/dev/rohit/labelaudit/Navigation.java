@@ -29,6 +29,18 @@ public final class Navigation<T> {
     } else entries.push(new Entry<>(current, state));
   }
 
+  public java.util.ArrayList<String> routes() {
+    java.util.ArrayList<String> out = new java.util.ArrayList<>();
+    for (Entry<T> e : entries) out.add(e.route);
+    java.util.Collections.reverse(out);
+    return out;
+  }
+
+  public void restore(java.util.List<String> routes, java.util.function.Function<String, T> state) {
+    entries.clear();
+    for (String route : routes) entries.push(new Entry<>(route, state.apply(route)));
+  }
+
   public Entry<T> back() {
     return entries.poll();
   }
