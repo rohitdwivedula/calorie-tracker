@@ -1,45 +1,46 @@
-Pending local update — app 1.0.10, versionCode 12
+Pending local update — app 1.0.11, versionCode 13
 User approval required before push/release publication.
 
 Changes:
-- Daily spent-so-far = elapsed resting baseline + macro-based food TEF + Health Connect
-  step estimate + additional manually recorded activity. Food calories unchanged.
-- Initial resting rate 1,766 kcal/day, editable with effective date; coefficients fixed
-  in ExpenditureCoefficients.java, documented with Westerterp (2004) reference.
-- Resting accrues by elapsed local-day fraction, including DST, matching intake as-of.
-- Expandable home breakdown, dated daily details and activity add/edit/delete flow.
-- Calorie-only logs use a labeled 8% digestion fallback instead of macro TEF. Nutrition
-  macros remain unknown. Known-macro foods keep their macro TEF despite calorie rounding.
-- Unresolved missing macros and missing/stale steps flag incomplete estimates.
-- Health Connect READ_STEPS only, aggregate COUNT_TOTAL with no origin filter.
-  No raw-step sums/writes, exercise-energy imports, counter or background permission.
-- Launch/resume requery recent dates; daily view/refresh action requery selected date.
-  Last successful count/sync/coverage survives failures; refresh replaces, never adds.
-- SQLite/backup schema 4: separate step cache, resting-rate and extra-activity records.
-  Old total-expenditure rates retained. Explicit model-start date preserves legacy days.
-  Schema 1–3 backups supported; restore is transactional replacement, not merging.
-- Portable backup has independent cachedSteps snapshots, validated on import and marked
-  stale after restore. Keeps historical measured inputs across Health Connect read limits.
-- Build updated for stable Health Connect 1.1.0: compile SDK 36, AGP 8.10.1, Gradle 8.11.1.
-  Target SDK stays 34; min SDK 26. CameraX Guava compile visibility explicit.
+- Optimized release APK: R8 code optimization, unused code/resource shrinking, no
+  debug preview tooling and android:debuggable=false. Developer debug build retained.
+- Reuse existing locally generated debug signing identity for personal sideload updates.
+  No keystore path, credentials or key material added to source control.
+- New scripts/build-installable.sh builds optimized APK, tests and release lint.
+- Steps now use whole-local-day aggregate windows (including today), matching calendar
+  day boundaries instead of clipping today's interval at now. No raw-step sums,
+  origin filter, source max, manual correction factor or elapsed-time scaling added.
+- Resting expenditure still accrues through the same as-of instant as food intake.
+- Last checked replaces Last synced: read time does not prove upstream watch sync.
+- Opt-in daily-detail comparison displays direct Health Connect midnight-to-now and
+  whole-day aggregate responses; it never changes cached totals or expenditure.
+- Cache metadata records the query end separately from observed-through/check time.
+  Old clipped current-day cache flagged stale until refreshed. Backup schema unchanged.
+
+Steps diagnosis limits:
+- Day-interval prorating is a hypothesis, not a confirmed device/platform diagnosis.
+- Synthetic regression models a day-spanning interval to ensure the query covers its
+  full local day. Independent comparison test verifies raw counts are shown unchanged.
+- Actual counts/source timestamps and both aggregate results must be checked on-device.
+  No source aggregation workaround or invented extra steps are persisted.
 
 Validation:
-- assembleDebug, testDebugUnitTest, lintDebug passed (offline after dependency setup).
-- 103 tests; zero failures/errors/skips. Prior food/navigation/accounting tests pass.
-- Requested example: TEF 220.8, steps 180, expenditure 2,266.8 kcal verified exactly.
-- Tests cover accrued resting, DST boundaries, effective rates, missing/zero/stale steps,
-  permission revocation, history restrictions, replacement refresh, partial-day coverage,
-  activity edits/deletion, food-edit TEF recalculation, mixed macro/fallback TEF, quick-log
-  edits/backdating/deletion, schema 2/3 upgrade, old backup
-  migration, step-snapshot restore validation and duplicate-free round trips.
-- Material UI test adds, edits and deletes activity; synthetic preview images rendered.
-- APK signature verification and 16 KB zip alignment passed.
-- No physical Pixel/watch connection or Health Connect permission/provider testing here;
-  real Samsung Health sync and platform permission UX need an on-device check.
-- Signing keys, personal databases/exports and local tooling excluded from Git.
+- assembleRelease, assembleDebug, testDebugUnitTest, lintDebug, lintRelease passed.
+- 106 automated tests; zero failures/errors/skips. Existing food and expenditure tests pass.
+- New checks: whole-day steps versus elapsed resting, direct aggregate comparison,
+  unchanged cache during diagnostics, comparison UI; local-day/DST checks retained.
+- Optimized APK signature and 16 KB zip alignment passed. Same signing certificate as
+  the existing debug signing configuration. Manifest is non-debuggable.
+- Inspected minified DEX: reflective Application/SavedStateHandle ViewModel constructor
+  retained. Exported app/privacy activity identities retained. No broad keep rules added.
+- No physical-device test of minified app/camera/Health Connect performed here.
+- No signing keys, private databases, backups, real user screenshots or health data committed.
 
-APK: app/build/outputs/apk/debug/app-debug.apk
-Bytes: 25637072
-SHA256: 32eb3a3a57ab46949e4b3c5acf4fb43e136ec4175396ee1ae0bf5865cfb357e2
-Review: docs/screenshots/compose-expenditure.png and compose-activity-calories.png.
+Previous published APK bytes: 25637072
+Optimized APK bytes: 6143749
+Size reduction: 76.0%
+APK: app/build/outputs/apk/release/app-release.apk
+SHA256: 0e3cd731a2fb66d82545d3d5e127715997c49b156f921c77c68fd2ca5257b48f
+
+Review: docs/screenshots/compose-step-query-comparison.png (synthetic counts).
 No release published for this pending update.

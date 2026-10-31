@@ -71,7 +71,7 @@ fun ExpenditureBreakdown(
             )
             if (cache.has("synced"))
                 Text(
-                    "Last synced ${whenText(cache.getLong("synced"), r.zone)}",
+                    "Last checked ${whenText(cache.getLong("synced"), r.zone)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -128,6 +128,10 @@ fun ExpenditureScreen(v: TrackerViewModel, connect: () -> Unit) {
             else "Estimated from recorded food and activity",
         ) {
             ExpenditureBreakdown(v, date, connect)
+            if (date >= LocalDate.parse(v.repo.settings.getString("energyStart")))
+                TextButton(enabled = !v.comparingSteps, onClick = { v.compareSteps(date) }) {
+                    Text(if (v.comparingSteps) "Checking…" else "Compare step queries")
+                }
         }
         val entries =
             remember(v.revision, date) {
@@ -151,6 +155,31 @@ fun ExpenditureScreen(v: TrackerViewModel, connect: () -> Unit) {
                     )
                 }
             }
+    }
+    v.stepComparison?.let { result ->
+        AlertDialog(
+            onDismissRequest = { v.stepComparison = null },
+            title = { Text("Health Connect responses") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("${result.date} · ${result.zone.id}")
+                    Text("Checked ${whenText(result.checkedAt.toEpochMilli(), result.zone)}")
+                    InfoRow(
+                        "Midnight → check time",
+                        result.untilNow?.let { "${kcal(it.toDouble())} steps" } ?: "No data",
+                    )
+                    InfoRow(
+                        "Whole calendar day",
+                        result.wholeDay?.let { "${kcal(it.toDouble())} steps" } ?: "No data",
+                    )
+                    Text(
+                        "Both counts come directly from Health Connect's aggregate API, across all sources. The app does not scale either count. This check does not change saved step totals.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { v.stepComparison = null }) { Text("Done") } },
+        )
     }
     if (pick)
         DateOnlyDialog(date, { pick = false }) {

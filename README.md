@@ -120,9 +120,19 @@ Android 14+ uses the platform module; older supported phones may need Health Con
 installed. Samsung Health/watch data reaches the app only through Health Connect.
 
 Launch/resume refreshes today and up to 30 recent dates since the new model began;
-viewing a date and Refresh steps also requery that date. Each local date/time-zone key
+viewing a date and Refresh steps also requery that date. Queries cover the whole local
+calendar day, including today, to match the daily Health Connect view. This avoids
+querying only part of a day-spanning provider interval. A clipped-interval aggregate
+is one possible cause of mismatches; it has not been confirmed on the user's device.
+Only resting expenditure is scaled by elapsed time; step totals are used directly.
+The observation timestamp is still bounded to the check time. Existing clipped
+current-day caches are marked stale until refreshed. The daily detail screen has an
+opt-in Compare step queries action showing the actual midnight-to-now and whole-day
+aggregate responses; these diagnostic reads don't alter saved totals. Last checked
+means this app read Health Connect, not that the upstream watch just synced.
+Each local date/time-zone key
 is replaced, not incremented. Cache entries retain the last successful count, sync time,
-covered-through instant and latest attempt/status. A successful measured zero is
+observed-through instant, query end and latest attempt/status. A successful measured zero is
 separate from no data. Failure or revoked permission preserves saved inputs while
 marking estimates incomplete/stale. A previous day's partial sync stays incomplete
 until a read covers the whole day. Food logging works without Health Connect.
@@ -285,8 +295,13 @@ build tools 35.0.0, command-line tools and Gradle's cache. Run:
 ./scripts/build-android.sh :app:lintDebug
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`. Debug signing is generated locally;
-no keys are committed. Java 17, Kotlin 2.0.21, Gradle 8.11.1, AGP 8.10.1, Compose Material 3, CameraX,
+Installable APK: `app/build/outputs/apk/release/app-release.apk`. Run
+`./scripts/build-installable.sh` for the optimized APK, unit tests and release lint.
+R8 strips unused code/resources; the release variant excludes debug preview tooling
+and is non-debuggable. Personal sideload builds reuse the existing locally generated
+debug signing identity, allowing an in-place update. No signing keys are committed.
+For development, `./scripts/build-android.sh` still produces a normal debug APK at
+`app/build/outputs/apk/debug/app-debug.apk`. Java 17, Kotlin 2.0.21, Gradle 8.11.1, AGP 8.10.1, Compose Material 3, CameraX,
 bundled ML Kit barcode scanner. No OCR dependency.
 
 For another Linux x86_64 machine, install a JDK 17 at `.android-toolchain/jdk` and

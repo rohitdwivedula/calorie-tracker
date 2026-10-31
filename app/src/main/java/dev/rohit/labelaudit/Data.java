@@ -86,6 +86,7 @@ public final class Data extends SQLiteOpenHelper {
       long from = date.atStartOfDay(zone).toInstant().toEpochMilli();
       long to = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
       number(data, "through", from, Math.min(to, data.getLong("synced")));
+      if (data.has("queryEnd")) number(data, "queryEnd", from, to);
     }
   }
 

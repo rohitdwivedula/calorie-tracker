@@ -247,6 +247,8 @@ public final class TrackerRepository {
         !"ok".equals(access)
             || !"ok".equals(cache.optString("status"))
             || now - cache.optLong("synced", 0) > ttl
+            || (date.equals(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
+                && !"local-day-v2".equals(cache.optString("queryPolicy")))
             || (date.isBefore(Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
                 && cache.optLong("through", 0) < midnight(date.plusDays(1)));
     double accruedResting =

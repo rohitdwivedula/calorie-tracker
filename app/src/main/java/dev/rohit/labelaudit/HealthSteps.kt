@@ -86,19 +86,21 @@ class StepsSync(private val repo: TrackerRepository, private val source: StepSou
             else {
                 try {
                     val from = date.atStartOfDay(repo.zone).toInstant()
-                    val to =
-                        minOf(
-                            date.plusDays(1).atStartOfDay(repo.zone).toInstant(),
-                            Instant.ofEpochMilli(now),
-                        )
-                    val count = if (from < to) source.aggregate(from, to) else null
+                    // Query the SAME whole local calendar day as Health Connect's daily total.
+                    // A provider may publish its current count in a day-spanning interval; ending
+                    // at now can prorate that already-recorded count a second time. Resting is
+                    // still accrued to now separately; step totals are never scaled by time.
+                    val to = date.plusDays(1).atStartOfDay(repo.zone).toInstant()
+                    val count = source.aggregate(from, to)
                     currentCoroutineContext().ensureActive()
                     require(count == null || count >= 0) { "Invalid step total" }
                     if (count == null) row.put("status", "no_data")
                     else
                         row.put("steps", count)
                             .put("synced", now)
-                            .put("through", to.toEpochMilli())
+                            .put("through", minOf(to.toEpochMilli(), now))
+                            .put("queryEnd", to.toEpochMilli())
+                            .put("queryPolicy", "local-day-v2")
                             .put("status", "ok")
                 } catch (e: CancellationException) {
                     throw e
@@ -130,4 +132,29 @@ class StepsSync(private val repo: TrackerRepository, private val source: StepSou
         }
         return access
     }
+}
+
+/** Opt-in diagnostic: compare raw aggregate responses, without changing the expenditure cache. */
+data class StepQueryComparison(
+    val date: LocalDate,
+    val zone: ZoneId,
+    val checkedAt: Instant,
+    val untilNow: Long?,
+    val wholeDay: Long?,
+)
+
+suspend fun compareStepQueries(
+    source: StepSource,
+    date: LocalDate,
+    zone: ZoneId,
+    now: Long,
+): StepQueryComparison {
+    check(source.access() == "ok") { "Connect Health Connect steps first" }
+    val from = date.atStartOfDay(zone).toInstant()
+    val end = date.plusDays(1).atStartOfDay(zone).toInstant()
+    val checked = Instant.ofEpochMilli(now)
+    require(checked >= from) { "Choose today or an earlier date" }
+    val partial = source.aggregate(from, minOf(end, checked))
+    val full = source.aggregate(from, end)
+    return StepQueryComparison(date, zone, checked, partial, full)
 }

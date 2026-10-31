@@ -7,9 +7,19 @@ android {
         applicationId 'dev.rohit.labelaudit'
         minSdk 26
         targetSdk 34
-        versionCode 12
-        versionName '1.0.10'
+        versionCode 13
+        versionName '1.0.11'
         ndk { abiFilters 'arm64-v8a' }
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            // Personal sideload distribution: reuse the existing locally generated debug signer
+            // so this optimized, non-debuggable APK updates installations without a data wipe.
+            signingConfig signingConfigs.debug
+        }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildFeatures { buildConfig true; compose true }
@@ -36,7 +46,6 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7'
     debugImplementation 'androidx.compose.ui:ui-tooling'
-    implementation 'androidx.compose.ui:ui-tooling-preview'
 
     implementation 'androidx.activity:activity:1.9.3'
     implementation 'androidx.core:core:1.13.1'

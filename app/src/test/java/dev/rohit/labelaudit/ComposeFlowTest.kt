@@ -212,6 +212,29 @@ class ComposeFlowTest {
         ui.onNodeWithText("New dish").assertIsDisplayed()
     }
 
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun stepComparisonShowsBothProviderCountsWithoutChangingSavedSteps() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.openEnergy()
+            v.stepComparison =
+                StepQueryComparison(
+                    java.time.LocalDate.now(v.repo.zone),
+                    v.repo.zone,
+                    java.time.Instant.now(),
+                    4000L,
+                    8000L,
+                )
+        }
+        ui.onNodeWithText("Health Connect responses").assertIsDisplayed()
+        ui.onNodeWithText("4,000 steps").assertIsDisplayed()
+        ui.onNodeWithText("8,000 steps").assertIsDisplayed()
+        screenshot("step-query-comparison")
+        ui.onNodeWithText("Done").performClick()
+        ui.onNodeWithText("Daily expenditure").assertIsDisplayed()
+    }
+
     // Robolectric #8460: dialogs with text input loop with width qualifiers above 320dp.
     // Keep the interaction test on its supported profile; other screenshots use 411dp.
     @Config(qualifiers = "w320dp-h891dp-xhdpi")

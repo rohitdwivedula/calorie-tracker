@@ -92,13 +92,67 @@ class ExpenditureIntegrationTest {
         sync.refresh(listOf(day, day.plusDays(1)), now)
         val past = source.intervals.first { it.first == Instant.ofEpochMilli(r.midnight(day)) }
         assertEquals(25 * 3600L, Duration.between(past.first, past.second).seconds)
-        assertEquals(Instant.ofEpochMilli(now), source.intervals.first().second)
+        assertEquals(
+            Instant.ofEpochMilli(r.midnight(day.plusDays(2))),
+            source.intervals.first().second,
+        )
         source.count = 5000
         sync.refresh(listOf(day), now + 1000)
         val row = r.db.stepCache(day.toString(), r.zone.id)
         assertEquals(5000, row.getLong("steps"))
         assertEquals(now + 1000, row.getLong("synced"))
         assertEquals(150.0, r.dailyExpenditure(day, now + 1000).steps!!, 0.0)
+    }
+
+    @Test
+    fun wholeDayAggregateDoesNotProrateAlreadyRecordedStepsAgain() = runBlocking {
+        val current = day.plusDays(1) // ordinary 24-hour day
+        val start = Instant.ofEpochMilli(r.midnight(current))
+        val end = Instant.ofEpochMilli(r.midnight(current.plusDays(1)))
+        val source =
+            object : StepSource {
+                override suspend fun access() = "ok"
+
+                override suspend fun aggregate(from: Instant, until: Instant): Long {
+                    // Models an interval-overlap aggregate for a source's day-spanning record.
+                    assertEquals(start, from)
+                    return (8000.0 * Duration.between(from, until).toMillis() /
+                            Duration.between(start, end).toMillis())
+                        .toLong()
+                }
+            }
+        val now = current.atTime(14, 54).atZone(r.zone).toInstant().toEpochMilli()
+        StepsSync(r, source).refresh(listOf(current), now)
+        val row = r.db.stepCache(current.toString(), r.zone.id)
+        assertEquals(8000, row.getLong("steps"))
+        assertEquals(now, row.getLong("through"))
+        assertEquals(end.toEpochMilli(), row.getLong("queryEnd"))
+        val expenditure = r.dailyExpenditure(current, now)
+        assertEquals(240.0, expenditure.steps!!, 1e-9)
+        assertEquals(1766.0 * 14.9 / 24, expenditure.resting, 1e-8)
+    }
+
+    @Test
+    fun queryComparisonReportsProviderResponsesWithoutScalingOrChangingCache() = runBlocking {
+        val current = day.plusDays(1)
+        val now = time(current, 14)
+        val dayEnd = Instant.ofEpochMilli(r.midnight(current.plusDays(1)))
+        val calls = mutableListOf<Pair<Instant, Instant>>()
+        val source =
+            object : StepSource {
+                override suspend fun access() = "ok"
+
+                override suspend fun aggregate(from: Instant, until: Instant): Long {
+                    calls.add(from to until)
+                    return if (until == dayEnd) 8000 else 4000
+                }
+            }
+        val result = compareStepQueries(source, current, r.zone, now)
+        assertEquals(4000L, result.untilNow)
+        assertEquals(8000L, result.wholeDay)
+        assertEquals(Instant.ofEpochMilli(now), calls.first().second)
+        assertEquals(dayEnd, calls.last().second)
+        assertEquals(0, r.db.stepCache(current.toString(), r.zone.id).length())
     }
 
     @Test
