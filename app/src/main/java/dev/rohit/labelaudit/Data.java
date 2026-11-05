@@ -182,6 +182,10 @@ public final class Data extends SQLiteOpenHelper {
     for (int i = 0; i < records.length(); i++) {
       JSONObject row = records.getJSONObject(i), data = row.getJSONObject("data");
       String kind = row.getString("kind");
+      if (kind.equals("draft")) {
+        data = data.getJSONObject("batch");
+        kind = "batch";
+      }
       if (kind.equals("food")) validateFoodLookup(data, ids);
       else if (kind.equals("batch") || kind.equals("direct")) {
         JSONArray a = data.getJSONArray("ingredients");
@@ -239,8 +243,19 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   static void validate(String kind, JSONObject j) throws Exception {
+    validate(kind, j, false);
+  }
+
+  private static void validate(String kind, JSONObject j, boolean draft) throws Exception {
     if (j.getString("id").isEmpty()) throw new Exception("Missing ID");
-    if (kind.equals("food")) {
+    if (kind.equals("draft")) {
+      JSONObject batch = j.getJSONObject("batch");
+      if (!j.getString("id").equals("draft-" + batch.getString("id")))
+        throw new Exception("Invalid draft identity");
+      number(j, "updatedAt", 0, 32503680000000d);
+      // Drafts allow incomplete fields but retain validated ingredient snapshots.
+      validate("batch", batch, true);
+    } else if (kind.equals("food")) {
       if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       number(j, "basis", 0.001, 100000);
       for (int n = 4; n < Nutrients.KEYS.length; n++)
@@ -251,8 +266,8 @@ public final class Data extends SQLiteOpenHelper {
         throw new Exception("Invalid unit");
       for (String k : new String[] {"kcal", "protein", "carbs", "fat"}) number(j, k, 0, 100000);
     } else if (kind.equals("batch") || kind.equals("direct")) {
-      if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
-      number(j, "available", 0, 32503680000000d);
+      if (!draft && j.getString("name").trim().isEmpty()) throw new Exception("Name required");
+      if (!draft || j.has("available")) number(j, "available", 0, 32503680000000d);
       number(j, "share", 0, 1);
       if (!j.isNull("completed") && j.getLong("completed") < j.getLong("available"))
         throw new Exception("Completion must follow availability");
@@ -280,7 +295,8 @@ public final class Data extends SQLiteOpenHelper {
         RecordedPortions.total(fractions, j.getDouble("share"));
       }
       JSONArray a = j.getJSONArray("ingredients");
-      if (a.length() == 0 || a.length() > 1000) throw new Exception("Ingredients required");
+      if ((!draft && a.length() == 0) || a.length() > 1000)
+        throw new Exception("Ingredients required");
       for (int i = 0; i < a.length(); i++) {
         JSONObject x = a.getJSONObject(i);
         validate("food", x.getJSONObject("food"));
@@ -315,11 +331,11 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   public String backup() throws Exception {
-    JSONObject root = new JSONObject().put("schema", 4);
+    JSONObject root = new JSONObject().put("schema", 5);
     JSONArray rows = new JSONArray();
     for (String k :
         new String[] {
-          "food", "batch", "direct", "calorie", "settings", "rate", "resting", "activity"
+          "food", "batch", "direct", "calorie", "settings", "rate", "resting", "activity", "draft"
         }) for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
     String result =
         root.put("records", rows)
@@ -333,7 +349,7 @@ public final class Data extends SQLiteOpenHelper {
 
   public void restore(String text) throws Exception {
     JSONObject root = new JSONObject(text);
-    if (root.getInt("schema") < 1 || root.getInt("schema") > 4)
+    if (root.getInt("schema") < 1 || root.getInt("schema") > 5)
       throw new Exception("Unsupported schema");
     JSONArray rows = root.getJSONArray("records");
     JSONArray lookups = root.has("lookups") ? root.getJSONArray("lookups") : new JSONArray();

@@ -49,6 +49,129 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun systemBackKeepsTwoIngredientDishAsResumableDraft() {
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Draft pasta")
+        for (name in listOf("Test noodles", "Test peppers")) {
+            ui.runOnIdle {
+                val v =
+                    androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+                v.chooseFood(
+                    org.json
+                        .JSONObject()
+                        .put("id", name)
+                        .put("name", name)
+                        .put("basis", 100)
+                        .put("unit", "g")
+                        .put("kcal", 100)
+                        .put("protein", 5)
+                        .put("carbs", 10)
+                        .put("fat", 2),
+                    "dish",
+                )
+            }
+            ui.onNodeWithText("Add to dish").performClick()
+        }
+        ui.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        ui.onNodeWithText("Drafts").performScrollTo().assertIsDisplayed()
+        screenshot("today-draft")
+        ui.onNodeWithText("Draft pasta").performClick()
+        ui.onNodeWithText("Test noodles").assertExists()
+        ui.onNodeWithText("Test peppers").assertExists()
+        ui.onNodeWithText("Done cooking").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(1, v.repo.db.list("batch").size)
+            org.junit.Assert.assertTrue(v.repo.db.list("draft").isEmpty())
+        }
+        ui.onNodeWithText("Drafts").assertDoesNotExist()
+    }
+
+    @Test
+    fun sourceIconsAndDeviceCredentialsWorkForQuickLogAndDishIngredients() {
+        fun sourceFood(name: String, calories: Int) =
+            org.json
+                .JSONObject()
+                .put("id", "source-ui-food")
+                .put("barcode", "000000000001")
+                .put("name", name)
+                .put("basis", 1)
+                .put("unit", "serving")
+                .put("servingGrams", 50)
+                .put("kcal", calories)
+                .put("protein", 5)
+                .put("carbs", 10)
+                .put("fat", 2)
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.credentialStore = FatSecretCredentials(ui.activity, TestCredentialsCipher())
+            v.foodProviders =
+                object : FoodProviders {
+                    override fun off(code: String) = sourceFood("OFF test food", 100)
+
+                    override fun fatSecret(code: String, keys: FatSecretKeys) =
+                        sourceFood("FatSecret test food", 120)
+                }
+            v.repo.db.save("food", sourceFood("My saved correction", 140))
+            v.mode = "quick"
+            v.lookup("000000000001")
+        }
+        ui.onNodeWithText("My saved correction").assertIsDisplayed()
+        ui.onNodeWithContentDescription("Saved source").assertIsDisplayed()
+        ui.onNodeWithContentDescription("Open Food Facts source").assertIsDisplayed()
+        ui.onNodeWithContentDescription("FatSecret source").performClick()
+        ui.onNodeWithText("Connect FatSecret").assertIsDisplayed()
+        ui.onNodeWithText("Open settings").performClick()
+        ui.onNodeWithText("Client ID").performTextInput("ui-synthetic-client")
+        ui.onNodeWithText("Client secret").performTextInput("ui-synthetic-secret")
+        ui.onNodeWithText("Save credentials").performClick()
+        ui.waitUntil(5000) {
+            androidx.lifecycle
+                .ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+                .foodChoice(FoodSource.FATSECRET)
+                .phase == LookupPhase.READY
+        }
+        ui.onNodeWithText("My saved correction").assertExists()
+        screenshot("food-source-picker")
+        ui.onNodeWithContentDescription("FatSecret source").performClick()
+        ui.onNodeWithText("FatSecret test food").assertExists()
+        ui.onNodeWithText("Quantity").performTextReplacement("2")
+        ui.onNodeWithText("Log food").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(
+                240.0,
+                v.repo.nutrition(v.repo.db.list("direct").single())[0],
+                0.0,
+            )
+            org.junit.Assert.assertFalse(v.repo.db.backup().contains("ui-synthetic-secret"))
+            org.junit.Assert.assertFalse(v.formJson.contains("ui-synthetic-secret"))
+        }
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Source test dish")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.mode = "dish"
+            v.lookup("000000000001")
+        }
+        ui.waitUntil(5000) {
+            androidx.lifecycle
+                .ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+                .foodChoice(FoodSource.OFF)
+                .phase == LookupPhase.READY
+        }
+        ui.onNodeWithText("FatSecret test food").assertExists()
+        ui.onNodeWithContentDescription("Open Food Facts source").performClick()
+        ui.onNodeWithText("OFF test food").assertExists()
+        ui.onNodeWithText("Add to dish").performClick()
+        ui.onNodeWithText("OFF test food").assertExists()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.credentialStore.clear()
+        }
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =

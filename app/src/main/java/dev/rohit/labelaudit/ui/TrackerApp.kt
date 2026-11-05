@@ -109,9 +109,10 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "stats" -> "Nutrition trends"
             "foods" -> if (v.mode == "dish") "Choose an ingredient" else "Saved foods"
             "cook" -> "Cooking"
-            "portion" -> "Set portion size"
+            "portion" -> "Portion size"
             "food-edit" -> "Food nutrition"
             "settings" -> "Settings"
+            "fatsecret-settings" -> "FatSecret"
             "nutrient-profile" -> "Nutrient references"
             "summary" -> "Energy balance"
             "energy" -> "Expenditure"
@@ -132,12 +133,20 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.headlineSmall) },
+                title = {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     if (v.canBack)
                         IconButton(onClick = v::back) { Icon(Icons.Default.ArrowBack, "Back") }
                 },
                 actions = {
+                    if (v.route == "portion" && v.lookupBarcode.isNotBlank()) FoodSourceButtons(v)
                     if (v.route == "Today")
                         IconButton(onClick = { v.go("summary") }) {
                             Icon(Icons.Default.Insights, "Energy balance")
@@ -193,6 +202,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                         )
                     "portion" -> PortionScreen(v)
                     "food-edit" -> FoodEditor(v)
+                    "fatsecret-settings" -> FatSecretSettingsScreen(v)
                     "history" -> HistoryScreen(v)
                     "stats" -> StatsScreen(v)
                     "nutrient-profile" -> NutrientProfileScreen(v)
@@ -228,6 +238,32 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                     }
                 }
         }
+    }
+    if (v.promptFatSecretSetup)
+        AlertDialog(
+            onDismissRequest = { v.promptFatSecretSetup = false },
+            title = { Text("Connect FatSecret") },
+            text = { Text("Add your FatSecret API credentials in Settings to use this source.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        v.promptFatSecretSetup = false
+                        v.openFatSecretSettings()
+                    }
+                ) {
+                    Text("Open settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { v.promptFatSecretSetup = false }) { Text("Cancel") }
+            },
+        )
+    v.foodSourceNotice?.let { notice ->
+        AlertDialog(
+            onDismissRequest = { v.foodSourceNotice = null },
+            text = { Text(notice) },
+            confirmButton = { TextButton(onClick = { v.foodSourceNotice = null }) { Text("OK") } },
+        )
     }
     if (manualBarcode)
         AlertDialog(

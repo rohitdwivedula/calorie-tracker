@@ -1,37 +1,39 @@
-Pending local update — app 1.0.12, versionCode 14
-User approval required before push/release publication.
+Pending local update — app 1.0.13, versionCode 15
+GitHub release publication requires user approval. No release published.
 
 Changes:
-- Stats defaults to Today, displaying recorded nutrient totals so far, including vitamins
-  and minerals. Partial known amounts show >=; missing values stay unknown, not zero.
-- 7/30-day logged-day averages and missing-data exclusions remain available.
-- One optional adult profile (birth month/year, DRI reference sex, life stage) supplies
-  published RDA/AI targets automatically. No demographics guessed; existing overrides win.
-- Profile uses MM/YYYY with no birth day; current age updates at the start of the birth
-  month in the local calendar. Legacy age-only profiles stay readable, with no date guessed.
-- Profile entry from Stats/Settings, optional per-nutrient override and reset to reference.
-- Reference boundaries for ages 31/51/71, optional pregnancy/lactation ages 19–50,
-  RAE/DFE/NE reference units and 2019 potassium AI/sodium CDRR values documented.
-- Sodium is a CDRR limit, not an adequacy goal/UL; total fat has an AMDR, no gram RDA.
-- References derived from profile, separate from food facts. Profile and custom targets
-  validated through existing schema 4 backup/restore; no database migration required.
-- Pending cleanup removes temporary step comparison UI/reads/tests/preview. Whole-day
-  steps query, normal refresh, resting accrual and its regression tests retained.
+- Shared Quick log / Add ingredient screen has Saved, OFF and FS source controls.
+- Defaults: saved corrections first, then OFF, then FatSecret if OFF is unavailable
+  or required nutrition is incomplete. Remote lookups prefetch concurrently.
+- Saved foods open immediately offline. Late results never replace an explicit
+  choice/correction, a newer scan, or snapshots in earlier dishes and food logs.
+- Switching sources preserves entered physical amounts only with verified shared
+  units; otherwise it resets with a notice rather than assuming g=ml or scoop sizes.
+- FatSecret settings accept personal runtime credentials. The gray FS control
+  opens setup when keys are absent. Keystore-encrypted credentials live under
+  noBackupFilesDir, separate from SQLite, export and navigation/form state.
+- Removing/replacing keys invalidates tokens and in-flight results; token caching
+  avoids repeated authentication. Settings never waits on an authentication lock.
+- Missing nutrition remains unknown; provider names/brands and serving labels stay
+  visible. FatSecret handles explicit g/ml portions and normalized micronutrient units.
+- Includes the previous local saved-drafts fix: multiple durable cooking drafts,
+  resume/discard controls, schema-5 export with schemas 1–4 import supported.
+- Personal backups/reports remain off GitHub; private LAN delivery only.
 
 Validation:
-- assembleRelease, testDebugUnitTest, lintDebug, lintRelease passed offline.
-- 118 tests passed; zero failures/errors/skips. Includes reference age boundaries,
-  birth-month/year rollover, local-month transitions, automatic nutrient band changes,
-  legacy ages, units/types, pregnancy/lactation rows, invalid profiles, override/reset and backup
-  validation, Today versus averages, partial vitamins and profile entry/edit UI.
+- assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
+- 138 tests passed, no failures/errors/skips. Includes source selection/fallback,
+  concurrency, stale responses, correction preservation, snapshot independence,
+  encrypted no-backup storage, export/restore exclusion, token lifetime/invalidation,
+  real Compose source controls/key-entry/quick-log/dish flows and existing accounting.
+- Production FatSecret client completed an authenticated barcode lookup and parsed
+  the expected named serving. Host credentials were never compiled into the app.
 - APK signature and 16 KB zip alignment verified; optimized/non-debuggable build retained.
-- No private profiles, food data, signing keys, local tooling or exports committed.
-- Robolectric synthetic previews reviewed; no physical-device test of these new views.
+- Scanned all APK members and changed source/docs for real host credentials: none found.
+- Synthetic Compose preview reviewed. No physical Pixel camera/Keystore test available;
+  storage tests use real AES/GCM with an ephemeral key in place of the Android Keystore.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6148893
-SHA256: 3b6fc608f6fce13ea74436bc18702a63ac133195daa521983f339d93edc77348
-Review: docs/screenshots/compose-stats-today-vitamins.png,
-        docs/screenshots/compose-nutrient-profile.png,
-        docs/nutrient-references.md (values and official sources).
-No release published for this pending update.
+Bytes: 6166225
+SHA256: 135b2e2cd1944f40dc0fe4ed0deb073eb1e8f039bea51e321c99dcf6725d5178
+Review: docs/screenshots/compose-food-source-picker.png

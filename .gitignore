@@ -17,3 +17,6 @@ local.properties
 exports/
 
 .kotlin/
+
+# Local FatSecret API credentials
+/.fatsecret.env

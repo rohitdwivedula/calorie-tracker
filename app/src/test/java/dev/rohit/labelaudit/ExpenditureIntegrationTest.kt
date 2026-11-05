@@ -33,6 +33,9 @@ class ExpenditureIntegrationTest {
             "settings",
             r.settings.put("start", day.toString()).put("energyStart", day.toString()),
         )
+        // Keep the fixture's legacy baseline aligned with its fixed tracking start,
+        // even when these tests run after that date.
+        r.db.save("rate", r.db.list("rate").single().put("date", day.toString()))
         r.db.list("resting").forEach { r.db.delete(it) }
         r.db.save(
             "resting",
@@ -224,7 +227,7 @@ class ExpenditureIntegrationTest {
         assertEquals(0.0, r.extraActivity(day), 0.0)
         StepsSync(r, FakeSource()).refresh(listOf(day), time(day.plusDays(1), 12))
         val backup = r.db.backup()
-        assertEquals(4, JSONObject(backup).getInt("schema"))
+        assertEquals(5, JSONObject(backup).getInt("schema"))
         assertEquals(1, JSONObject(backup).getJSONArray("cachedSteps").length())
         r.db.restore(backup)
         r.db.restore(backup)

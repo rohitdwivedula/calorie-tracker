@@ -21,6 +21,17 @@ import org.json.JSONObject
 class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     AndroidViewModel(app) {
     val repo = TrackerRepository(app)
+    internal var credentialStore = FatSecretCredentials(app)
+    internal var foodProviders: FoodProviders = AndroidFoodProviders(repo.db)
+    var fatSecretConfigured by mutableStateOf(credentialStore.configured)
+        private set
+
+    private var lookupGeneration = 0
+    private val foodJobs = mutableListOf<Job>()
+    private var sourcePinned = false
+    private var requestedFoodSource: FoodSource? = null
+    private var lookupFoodId = ""
+    private val sourceRevisions = mutableMapOf<FoodSource, Int>()
     private val stepsSync = StepsSync(repo, AndroidStepSource(app))
     private var stepsJob: Job? = null
     private val pendingStepDates = linkedSetOf<LocalDate>()
@@ -118,6 +129,43 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     var foodJson by mutableStateOf(saved.get<String>("food") ?: "{}")
         private set
 
+    var lookupBarcode by
+        mutableStateOf(
+            saved.get<String>("lookupBarcode") ?: JSONObject(foodJson).optString("barcode")
+        )
+        private set
+
+    var selectedFoodSource by
+        mutableStateOf(
+            saved.get<String>("foodSource")?.let { FoodSource.valueOf(it) }
+                ?: if (JSONObject(foodJson).optString("name").isNotBlank()) FoodSource.SAVED
+                else null
+        )
+        private set
+
+    var foodChoices by
+        mutableStateOf(
+            selectedFoodSource?.let { mapOf(it to FoodChoice(LookupPhase.READY, foodJson)) }
+                ?: emptyMap()
+        )
+        private set
+
+    var foodSourceNotice by mutableStateOf<String?>(null)
+    var promptFatSecretSetup by mutableStateOf(false)
+    val lookingUpFood
+        get() = foodChoices.values.any { it.phase == LookupPhase.LOADING }
+
+    val completeFood
+        get() = foodComplete(foodJson)
+
+    private fun foodComplete(json: String): Boolean =
+        try {
+            Data.validate("food", JSONObject(json))
+            true
+        } catch (_: Exception) {
+            false
+        }
+
     var mode: String
         get() = saved["mode"] ?: "quick"
         set(v) {
@@ -178,6 +226,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         history.back()?.let {
             route = it.route
             if (route == "Today") refresh()
+            if (route == "portion") selectDefaultFood()
             saveNavigation()
         }
     }
@@ -217,6 +266,18 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     }
 
     fun setDraft(value: JSONObject) {
+        if (value.has("id")) {
+            val row = JSONObject().put("id", "draft-" + value.getString("id"))
+            if (
+                value.optString("name").isNotBlank() ||
+                    value.getJSONArray("ingredients").length() > 0
+            ) {
+                repo.db.save(
+                    "draft",
+                    row.put("batch", value).put("updatedAt", System.currentTimeMillis()),
+                )
+            } else repo.db.delete(row)
+        }
         draftJson = value.toString()
         saved["draft"] = draftJson
     }
@@ -236,6 +297,15 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
             ?: error("Record no longer exists")
 
     fun beginCook(source: JSONObject? = null, duplicate: Boolean = false) {
+        if (source != null && !duplicate) {
+            repo.db
+                .list("draft")
+                .firstOrNull { it.getJSONObject("batch").getString("id") == source.getString("id") }
+                ?.let {
+                    resumeDraft(it.getString("id"))
+                    return
+                }
+        }
         setDraft(
             when {
                 source == null ->
@@ -252,6 +322,20 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         go("cook")
     }
 
+    fun resumeDraft(id: String) {
+        setDraft(record("draft", id).getJSONObject("batch"))
+        go("cook")
+    }
+
+    fun discardDraft(id: String) {
+        repo.db.delete(record("draft", id))
+        if (draft.optString("id").let { "draft-$it" } == id) {
+            draftJson = "{}"
+            saved["draft"] = draftJson
+        }
+        refresh()
+    }
+
     fun removeIngredient(index: Int) {
         val d = draft
         d.getJSONArray("ingredients").remove(index)
@@ -261,11 +345,27 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     fun saveCook() {
         val d = draft
         if (!d.has("available")) d.put("available", System.currentTimeMillis())
-        repo.db.save("batch", d)
+        val db = repo.db.writableDatabase
+        db.beginTransaction()
+        try {
+            repo.db.save("batch", d)
+            repo.db.delete(JSONObject().put("id", "draft-" + d.getString("id")))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        draftJson = "{}"
+        saved["draft"] = draftJson
         home()
     }
 
     fun chooseFood(f: JSONObject, newMode: String = mode, editIndex: Int = -1) {
+        cancelFoodLookups()
+        lookupBarcode = f.optString("barcode")
+        saved["lookupBarcode"] = lookupBarcode
+        selectedFoodSource = FoodSource.SAVED
+        saved["foodSource"] = FoodSource.SAVED.name
+        foodChoices = mapOf(FoodSource.SAVED to FoodChoice(LookupPhase.READY, f.toString()))
         mode = newMode
         ingredientIndex = editIndex
         setFood(JSONObject(f.toString()))
@@ -292,37 +392,259 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     }
 
     fun manualFood() {
+        cancelFoodLookups()
+        lookupBarcode = ""
+        saved["lookupBarcode"] = ""
+        foodChoices = emptyMap()
+        selectedFoodSource = null
+        saved.remove<String>("foodSource")
         setFood(JSONObject())
         clearForm("food")
         go("food-edit")
     }
 
     fun editFood() {
+        sourcePinned = true
+        requestedFoodSource = selectedFoodSource
         clearForm("food")
         go("food-edit")
     }
 
+    private fun cancelFoodLookups() {
+        lookupGeneration++
+        foodJobs.forEach { it.cancel() }
+        // Retain canceled-but-running I/O so restore can join it before replacing the DB.
+        foodJobs.removeAll { it.isCompleted }
+    }
+
     fun lookup(raw: String) {
-        if (busy) return
-        val origin = route
-        val requestedMode = mode
-        lookupFallback = raw
-        busy = true
-        viewModelScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) { FoodLookup.fetch(repo.db, raw) }
-                lookupFallback = null
-                if (route == origin && mode == requestedMode) chooseFood(result)
-            } catch (e: Exception) {
-                if (route == origin) error = e.message ?: "Lookup failed. Saved foods work offline."
-            } finally {
-                busy = false
+        val code = BarcodeValue.productCode(raw)
+        if (code == null) {
+            error = "Unsupported barcode or QR code"
+            return
+        }
+        cancelFoodLookups()
+        val local =
+            repo.db.list("food").firstOrNull {
+                it.optString("barcode").isNotEmpty() &&
+                    it.optString("barcode").padStart(14, '0') == code.padStart(14, '0')
+            }
+        lookupBarcode = code
+        saved["lookupBarcode"] = code
+        lookupFallback = code
+        lookupFoodId = local?.getString("id") ?: UUID.randomUUID().toString()
+        sourcePinned = false
+        requestedFoodSource = null
+        selectedFoodSource = null
+        saved.remove<String>("foodSource")
+        foodChoices =
+            mapOf(
+                FoodSource.SAVED to
+                    if (local != null) FoodChoice(LookupPhase.READY, local.toString())
+                    else FoodChoice(LookupPhase.NOT_FOUND)
+            )
+        foodJson = "{}"
+        saved["food"] = foodJson
+        clearForm("portion")
+        go("portion")
+        // Start both before choosing a remote default. A fast FatSecret result waits
+        // for OFF, while an existing saved food is usable immediately.
+        foodChoices =
+            foodChoices +
+                (FoodSource.OFF to FoodChoice(LookupPhase.LOADING)) +
+                (FoodSource.FATSECRET to
+                    FoodChoice(
+                        if (fatSecretConfigured) LookupPhase.LOADING else LookupPhase.NEEDS_KEY
+                    ))
+        selectDefaultFood()
+        fetchSource(FoodSource.OFF)
+        if (fatSecretConfigured) fetchSource(FoodSource.FATSECRET)
+    }
+
+    private fun fetchSource(source: FoodSource) {
+        val generation = lookupGeneration
+        val code = lookupBarcode
+        val sourceRevision = (sourceRevisions[source] ?: 0) + 1
+        sourceRevisions[source] = sourceRevision
+        val id =
+            lookupFoodId.ifBlank { food.optString("id").ifBlank { UUID.randomUUID().toString() } }
+        foodChoices = foodChoices + (source to FoodChoice(LookupPhase.LOADING))
+        foodJobs.removeAll { it.isCompleted }
+        foodJobs +=
+            viewModelScope.launch {
+                val choice =
+                    try {
+                        val result =
+                            withContext(Dispatchers.IO) {
+                                if (source == FoodSource.OFF) foodProviders.off(code)
+                                else
+                                    foodProviders.fatSecret(
+                                        code,
+                                        credentialStore.read()
+                                            ?: throw IllegalStateException(
+                                                "Add FatSecret credentials in Settings"
+                                            ),
+                                    )
+                            }
+                        result.put("id", id)
+                        if (source == FoodSource.OFF) result.put("provider", "openfoodfacts")
+                        FoodChoice(LookupPhase.READY, result.toString())
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: FoodNotFound) {
+                        FoodChoice(LookupPhase.NOT_FOUND, note = e.message ?: "Product not found")
+                    } catch (e: Exception) {
+                        FoodChoice(
+                            LookupPhase.ERROR,
+                            note =
+                                if (e is IllegalStateException) e.message ?: "Lookup failed"
+                                else
+                                    "Couldn't reach ${source.label}. Saved foods still work offline.",
+                        )
+                    }
+                if (
+                    generation != lookupGeneration ||
+                        sourceRevisions[source] != sourceRevision ||
+                        (source == FoodSource.FATSECRET && !fatSecretConfigured)
+                )
+                    return@launch
+                foodChoices = foodChoices + (source to choice)
+                selectDefaultFood()
+            }
+    }
+
+    private fun selectDefaultFood() {
+        if (route != "portion") return
+        if (sourcePinned) {
+            requestedFoodSource?.let {
+                if (foodChoices[it]?.phase == LookupPhase.READY && selectedFoodSource != it)
+                    applyFoodSource(it)
+            }
+            return
+        }
+        val savedFood = foodChoices[FoodSource.SAVED]
+        val off = foodChoices[FoodSource.OFF]
+        val fs = foodChoices[FoodSource.FATSECRET]
+        val selected =
+            when {
+                savedFood?.json?.let(::foodComplete) == true -> FoodSource.SAVED
+                off?.phase == LookupPhase.LOADING -> null
+                off?.json?.let(::foodComplete) == true -> FoodSource.OFF
+                fs?.phase == LookupPhase.LOADING -> null
+                fs?.json?.let(::foodComplete) == true -> FoodSource.FATSECRET
+                off?.phase == LookupPhase.READY -> FoodSource.OFF
+                fs?.phase == LookupPhase.READY -> FoodSource.FATSECRET
+                else -> null
+            }
+        if (selected != null && selectedFoodSource != selected) applyFoodSource(selected)
+    }
+
+    fun foodChoice(source: FoodSource): FoodChoice =
+        foodChoices[source]
+            ?: FoodChoice(
+                if (source == FoodSource.FATSECRET && !fatSecretConfigured) LookupPhase.NEEDS_KEY
+                else LookupPhase.IDLE
+            )
+
+    fun selectFoodSource(source: FoodSource) {
+        when (foodChoice(source).phase) {
+            LookupPhase.NEEDS_KEY -> promptFatSecretSetup = true
+            LookupPhase.NOT_FOUND ->
+                foodSourceNotice =
+                    if (source == FoodSource.SAVED) "No saved food for this barcode yet"
+                    else "${source.label} didn't find this barcode"
+            LookupPhase.ERROR -> foodSourceNotice = foodChoice(source).note
+            LookupPhase.IDLE -> {
+                if (lookupBarcode.isBlank()) {
+                    foodSourceNotice = "Scan a barcode first"
+                    return
+                }
+                sourcePinned = true
+                requestedFoodSource = source
+                lookupFoodId = food.optString("id").ifBlank { UUID.randomUUID().toString() }
+                if (source == FoodSource.SAVED)
+                    foodSourceNotice = "No saved food for this barcode yet"
+                else fetchSource(source)
+            }
+            LookupPhase.LOADING -> {
+                sourcePinned = true
+                requestedFoodSource = source
+                message = "${source.label} will open when ready"
+            }
+            LookupPhase.READY -> {
+                sourcePinned = true
+                requestedFoodSource = source
+                applyFoodSource(source)
             }
         }
     }
 
+    private fun applyFoodSource(source: FoodSource) {
+        val next = JSONObject(foodChoices[source]?.json ?: return)
+        val old = food
+        val canonical = field("portion", "canonical").toDoubleOrNull()
+        var converted: Double? = null
+        var sharedUnit: String? = null
+        if (canonical != null && canonical > 0 && old.has("unit") && next.has("unit")) {
+            for (unit in listOf("g", "ml")) {
+                try {
+                    val physical =
+                        Portion.convert(
+                            canonical,
+                            old.getString("unit"),
+                            unit,
+                            old.optDouble("servingGrams", 0.0),
+                            old.optDouble("servingMl", 0.0),
+                        )
+                    converted =
+                        Portion.convert(
+                            physical,
+                            unit,
+                            next.getString("unit"),
+                            next.optDouble("servingGrams", 0.0),
+                            next.optDouble("servingMl", 0.0),
+                        )
+                    sharedUnit = unit
+                    break
+                } catch (_: IllegalArgumentException) {}
+            }
+        }
+        setFood(next)
+        clearForm("portion")
+        if (converted != null) {
+            field("portion", "canonical", converted.toString(), true)
+            // Display the same physical amount, even when label serving sizes differ.
+            field("portion", "unit", sharedUnit!!, true)
+        } else if (canonical != null) {
+            message = "Portion reset: these sources have no shared weight or volume conversion"
+        }
+        selectedFoodSource = source
+        saved["foodSource"] = source.name
+    }
+
+    fun openFatSecretSettings() {
+        go("fatsecret-settings")
+    }
+
+    fun saveFatSecretCredentials(clientId: String, secret: String) {
+        credentialStore.save(FatSecretKeys(clientId, secret))
+        fatSecretConfigured = true
+        foodProviders.clearToken()
+        back()
+        if (lookupBarcode.isNotBlank() && route == "portion") fetchSource(FoodSource.FATSECRET)
+    }
+
+    fun clearFatSecretCredentials() {
+        credentialStore.clear()
+        sourceRevisions[FoodSource.FATSECRET] = (sourceRevisions[FoodSource.FATSECRET] ?: 0) + 1
+        fatSecretConfigured = false
+        foodProviders.clearToken()
+        foodChoices = foodChoices + (FoodSource.FATSECRET to FoodChoice(LookupPhase.NEEDS_KEY))
+        message = "FatSecret credentials removed"
+    }
+
     fun fallbackFood() {
-        val code = BarcodeValue.productCode(lookupFallback)
+        val code = BarcodeValue.productCode(lookupFallback ?: lookupBarcode)
         setFood(JSONObject().apply { if (code != null) put("barcode", code) })
         clearForm("food")
         lookupFallback = null
@@ -334,6 +656,13 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         Data.validate("food", f)
         repo.db.save("food", f)
         setFood(f)
+        foodChoices =
+            foodChoices + (FoodSource.SAVED to FoodChoice(LookupPhase.READY, f.toString()))
+        // Keep the prefetched provider values intact for comparison with this correction.
+        selectedFoodSource = FoodSource.SAVED
+        requestedFoodSource = FoodSource.SAVED
+        saved["foodSource"] = FoodSource.SAVED.name
+        sourcePinned = true
         refresh()
         if (mode == "library") go("foods") else go("portion")
     }
@@ -601,7 +930,17 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
             try {
                 stepsJob?.cancelAndJoin()
                 pendingStepDates.clear()
+                val activeFoodJobs = foodJobs.toList()
+                cancelFoodLookups()
+                activeFoodJobs.forEach { it.join() }
+                foodChoices = emptyMap()
+                lookupBarcode = ""
+                saved["lookupBarcode"] = ""
+                selectedFoodSource = null
+                saved.remove<String>("foodSource")
                 withContext(Dispatchers.IO) { repo.db.restore(text) }
+                draftJson = "{}"
+                saved["draft"] = draftJson
                 home()
                 refreshSteps()
                 message = "Backup restored"
@@ -613,8 +952,15 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         }
     }
 
+    init {
+        if (route == "portion" && food.optString("name").isBlank() && lookupBarcode.isNotBlank()) {
+            lookup(lookupBarcode)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        cancelFoodLookups()
         repo.db.close()
     }
 }

@@ -13,15 +13,23 @@ host window. CameraX PreviewView uses AndroidView interop; camera actions are Co
 The old Java widget activity has been removed.
 Rendered test previews are in [docs/screenshots](docs/screenshots/README.md).
 
-`TrackerViewModel` keeps navigation and form/draft state in SavedStateHandle.
+`TrackerViewModel` keeps navigation and active form state in SavedStateHandle.
+Cooking drafts are also autosaved to SQLite after each name/ingredient change,
+so **Today → Drafts** can resume them after Back, app closure or process death.
+Multiple drafts are supported; discarding requires confirmation. Drafts do not
+contribute to intake or available dishes. **Done cooking** saves the batch and
+removes its draft in one transaction. Edits remain separate from saved batches
+until confirmed.
 Screens and shared components are split under `ui/`. `TrackerRepository` contains
 the existing Java accounting/persistence queries, `FoodLookup` handles explicit
 archived API lookup, and `BatchOperations` edits recorded facts without UI code.
-Database schema 4, backup schemas 1–4, package identity and nutrition snapshots are
+Database schema 4, backup schemas 1–5, package identity and nutrition snapshots are
 preserved. Returning to the app refreshes the as-of calculations.
 
 Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
-Release publication always requires user approval.
+Release publication always requires user approval. Personal backups and nutrition
+audits must never be release assets; use the [private file handoff](docs/private-downloads.md) managed outside this repository.
+[FatSecret networking](docs/fatsecret-networking.md) explains static outbound-IP options.
 
 ## App icon
 
@@ -175,7 +183,7 @@ and activity rather than inventing future expenditure.
   They can be edited/deleted in History. The When control opens date and 24-hour
   time pickers for both new and existing calorie-only logs. Backdating updates
   the same record and moves its intake to the chosen day without duplication;
-  leaving the timestamp unchanged preserves its original instant. Saved foods are in the Foods tab. Lookup uses Open Food Facts. Review
+  leaving the timestamp unchanged preserves its original instant. Saved foods are in the Foods tab. Scans use the source selection described below. Review
   the product's nutrition basis and save; incomplete nutrition requires manual entry.
   Product identity starts fresh on every lookup. Arbitrary QR URLs are never visited.
 - Scanned foods open a nutrition-label page, preferring the package serving size and
@@ -218,7 +226,7 @@ and activity rather than inventing future expenditure.
 
 ## Raw lookup archive
 
-Each successful JSON API lookup retains the complete decoded UTF-8 response text,
+Each successful Open Food Facts JSON lookup retains the complete decoded UTF-8 response text,
 including fields the current app does not understand. A separate SQLite `lookups`
 table stores a stable ID, requested barcode (as text, preserving leading zeros),
 retrieval time, request URL, raw payload and SHA-256 checksum. Food records and
@@ -243,11 +251,12 @@ Future nutrient extraction can use archived fields without another API request.
 
 SQLite `nutrition.db` schema version 4 stores authoritative JSON documents in a
 structured records table with stable IDs and explicit kinds: food, batch, direct,
-settings, effective-dated legacy/resting rates, and extra activity. Calorie-only records store an instant
-and energy without fabricated nutrient values. Batch eating events carry stable IDs
+draft, settings, effective-dated legacy/resting rates, and extra activity. Calorie-only
+records store an instant and energy without fabricated nutrient values. Batch eating events carry stable IDs
 and timestamps, and are included in backups. System Back navigates through prior screens, retaining in-memory inputs and scroll
 position. Saving returns to the parent screen and clears intermediate entry screens;
-only Back from home exits. A cooking draft is restored after activity recreation.
+only Back from home exits. Cooking drafts persist independently of activity recreation
+and are included in exports.
 
 SQLiteOpenHelper migrates older databases by adding the kind index, raw-lookup table and step cache without changing food facts;
 unsupported future migrations fail rather than discarding data. The prototype's
@@ -276,10 +285,42 @@ Resting expenditure accrues by elapsed fraction of the local calendar day, inclu
 before tracking start. See Expenditure above for the component calculation and legacy
 boundary. Current-week balance is only week-to-date, never an achieved full-week goal.
 
+## Barcode sources and device credentials
+
+Quick log and dish ingredients share the portion screen's three source controls:
+Saved (bookmark), OFF and FS. Scanning opens a saved food immediately, preserving
+manual corrections. Both remote lookups run concurrently in the background; without
+a saved food, OFF is the default and FatSecret is used if OFF is unavailable or lacks
+required nutrition. Explicit source selection wins over late results. Old scans and
+responses from removed/replaced credentials cannot change the current selection.
+
+Switching sources preserves entered grams/ml when both foods have an explicit shared
+conversion. Without one the portion resets with a notice; no grams=ml, scoop-size or
+egg-weight assumptions are made. Neither prefetching nor switching changes saved
+foods or old ingredient snapshots. Logging/saving an explicitly chosen source updates
+the saved food for that barcode. Manual corrections become the Saved alternative,
+leaving provider alternatives available for comparison. Missing nutrients stay absent.
+
+**Settings → Food lookup → Connect FatSecret** accepts the user's Client ID and Client
+Secret. The gray FS icon opens a setup prompt when credentials are absent. These
+runtime values are never bundled in the APK, stored in SQLite, put in navigation/form
+state, or included in exports. `FatSecretCredentials` encrypts them with an Android
+Keystore AES/GCM key in `Context.noBackupFilesDir`, which Android excludes from cloud
+backup and device transfer. Removing credentials deletes the file and invalidates the
+in-memory token. Food restore leaves this device's credentials alone. Tokens are cached
+in memory until shortly before expiry; responses to rate limits/access errors fail
+gracefully without blocking saved foods or retry storms. FatSecret lookup results stay
+in session memory; user-selected nutrition snapshots and provider IDs are saved normally.
+
+The parser uses explicit g/ml serving sizes, converts micronutrient mg/µg to stored
+grams, and keeps missing fields unknown. Ambiguous `oz` metrics are not interpreted
+as mass or fluid volume. No automated API calls occur in the tests; synthetic providers
+exercise concurrency, fallback, selection, editing and preservation of historical facts.
+
 ## Backup and privacy
 
-**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 4
-(restore also accepts schemas 1, 2 and 3) and
+**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 5
+(restore also accepts schemas 1–4) and
 authoritative records/settings using Android's document picker. **Restore** validates
 types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
 replacement. It replaces ALL tracker data after confirmation; it does not merge.
@@ -287,8 +328,10 @@ Repeated restoration cannot duplicate records. Export first to preserve current 
 Keep backups private: they contain food/activity history, saved step totals and settings. No signing keys or
 personal backups belong in Git.
 
-No analytics, photos, remote uploads or accounts. Only explicitly requested barcode
-lookups contact `world.openfoodfacts.org`. Open Food Facts community data is licensed
+No analytics, photos or account registration for the tracker. Each explicit barcode
+scan prefetches Open Food Facts and, if configured, FatSecret—even when the saved
+food opens immediately. These requests send the barcode, not food history or backups.
+FatSecret credentials are device-only and excluded from exports and Android backup. Open Food Facts community data is licensed
 under ODbL; see https://world.openfoodfacts.org/data. Missing values never become zero.
 
 ## Build here

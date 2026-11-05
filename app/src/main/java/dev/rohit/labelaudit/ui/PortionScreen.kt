@@ -22,6 +22,10 @@ import org.json.*
 
 @Composable
 fun PortionScreen(v: TrackerViewModel) {
+    if (!v.completeFood) {
+        FoodLookupPlaceholder(v)
+        return
+    }
     val f = v.food
     val grams = f.optDouble("servingGrams", 0.0)
     val ml = f.optDouble("servingMl", 0.0)
@@ -39,7 +43,7 @@ fun PortionScreen(v: TrackerViewModel) {
     val initialAmount = Portion.convert(canonical ?: defaultCanonical, base, unit, grams, ml)
     val amount = v.field("portion", "amount", fmt(initialAmount))
     val factor = (canonical ?: 0.0) / f.getDouble("basis")
-    var more by rememberSaveable { mutableStateOf(false) }
+    var more by rememberSaveable(f.getString("id")) { mutableStateOf(false) }
     fun change(value: Double) {
         v.field("portion", "amount", fmt(value), true)
         v.field(
@@ -54,6 +58,13 @@ fun PortionScreen(v: TrackerViewModel) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (v.selectedFoodSource != null)
+                Text(
+                    v.selectedFoodSource!!.label +
+                        if (f.optString("brand").isNotBlank()) " · " + f.optString("brand") else "",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             Section(
                 f.optString("name"),
                 f.optString("servingLabel").ifBlank {

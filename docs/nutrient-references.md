@@ -68,8 +68,9 @@ unjustified conversions of historical snapshots. Reference units are explicit in
 The optional `settings.nutrientProfile` object includes policy, birthMonth, birthYear, sex
 and stage (legacy profiles may contain age instead). Defaults
 are derived at read time and are never copied into the custom `nutrientGoals` map. Settings
-validation also validates imported profiles transactionally; the existing schema 4 JSON
-backup carries the profile without a SQL schema change. Backups with no profile still work.
+validation also validates imported profiles transactionally; schema 5 JSON
+backups carry the profile (schema 4 backups remain importable) without a SQL schema
+change. Backups with no profile still work.
 
 ## Official sources
 

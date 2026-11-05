@@ -30,8 +30,10 @@ public final class FoodLookup {
       lookupId = db.cacheLookup(code, c.getURL().toString(), rawResponse);
       JSONObject response = new JSONObject(rawResponse);
       if (response.optInt("status") != 1)
-        throw new Exception("Unknown product; create it manually");
+        throw new FoodNotFound("Open Food Facts didn't find this barcode");
       product = response.getJSONObject("product");
+    } catch (FileNotFoundException e) {
+      throw new FoodNotFound("Open Food Facts didn't find this barcode");
     } finally {
       c.disconnect();
     }
@@ -39,7 +41,8 @@ public final class FoodLookup {
         new JSONObject()
             .put("barcode", code)
             .put("lookupId", lookupId)
-            .put("name", product.optString("product_name", ""));
+            .put("name", product.optString("product_name", ""))
+            .put("brand", product.optString("brands", ""));
     JSONObject nutrients = product.optJSONObject("nutriments");
     String servingLabel = product.optString("serving_size", "");
     double grams = Portion.labelAmount(servingLabel, "g"),

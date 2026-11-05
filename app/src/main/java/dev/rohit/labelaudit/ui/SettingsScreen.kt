@@ -140,6 +140,11 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
                 Text("Save settings")
             }
         }
+        Section("Food lookup") {
+            TextButton(onClick = v::openFatSecretSettings) {
+                Text(if (v.fatSecretConfigured) "FatSecret · connected" else "Connect FatSecret")
+            }
+        }
         Section("Your data", "Stored locally on this phone") {
             FilledTonalButton(onClick = export, Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.FileDownload, null)
@@ -158,7 +163,7 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
             )
         }
         Text(
-            "Open Food Facts · ODbL\nBatch Nutrition ${BuildConfig.VERSION_NAME}",
+            "Open Food Facts · ODbL\nFood lookup also available from FatSecret\nBatch Nutrition ${BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

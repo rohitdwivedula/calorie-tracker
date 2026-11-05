@@ -32,6 +32,9 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
     val daily = dailySummary.deficit()
     val weekly = weeklySummary.deficit()
     val batches = remember(revision) { r.db.list("batch").filter { it.isNull("completed") } }
+    val drafts =
+        remember(revision) { r.db.list("draft").sortedByDescending { it.getLong("updatedAt") } }
+    var discard by remember { mutableStateOf<String?>(null) }
     Page {
         Section(today.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))) {
             Text(
@@ -120,6 +123,34 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                 Text("Quick log", maxLines = 1)
             }
         }
+        if (drafts.isNotEmpty()) {
+            Text("Drafts", style = MaterialTheme.typography.titleLarge)
+            drafts.forEach { row ->
+                val d = row.getJSONObject("batch")
+                Card(onClick = { v.resumeDraft(row.getString("id")) }, Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                d.optString("name").ifBlank { "Untitled dish" },
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            val count = d.getJSONArray("ingredients").length()
+                            Text(
+                                "$count ${if (count == 1) "ingredient" else "ingredients"} · Continue cooking",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { discard = row.getString("id") }) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                "Discard draft ${d.optString("name").ifBlank { "Untitled dish" }}",
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Text("Available dishes", style = MaterialTheme.typography.titleLarge)
         if (batches.isEmpty())
             EmptyState(
@@ -160,5 +191,23 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                 }
             }
         }
+    }
+    discard?.let { id ->
+        AlertDialog(
+            onDismissRequest = { discard = null },
+            title = { Text("Discard draft?") },
+            text = { Text("This removes the unfinished edits. Saved dishes stay unchanged.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        v.run { v.discardDraft(id) }
+                        discard = null
+                    }
+                ) {
+                    Text("Discard")
+                }
+            },
+            dismissButton = { TextButton(onClick = { discard = null }) { Text("Keep draft") } },
+        )
     }
 }
