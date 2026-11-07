@@ -172,6 +172,101 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun nameSearchTilesShowBothProvidersAndOpenTheSharedPortionFlow() {
+        fun food(name: String, calories: Int, fiber: Double? = null) =
+            org.json
+                .JSONObject()
+                .put("id", "search-ui-$name")
+                .put("name", name)
+                .put("basis", 1)
+                .put("unit", "serving")
+                .put("servingLabel", "1 medium")
+                .put("servingGrams", 120)
+                .put("kcal", calories)
+                .put("protein", 1)
+                .put("carbs", 8)
+                .put("fat", 0)
+                .apply { if (fiber != null) put("fiber", fiber) }
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.credentialStore = FatSecretCredentials(ui.activity, TestCredentialsCipher())
+            v.saveFatSecretCredentials("synthetic-search-client", "synthetic-search-secret")
+            v.repo.db.save("food", food("Saved peppers", 45))
+            v.foodProviders =
+                object : FoodProviders {
+                    override fun off(code: String) =
+                        food("Packaged red peppers", 31, 2.0).put("barcode", code)
+
+                    override fun fatSecret(code: String, keys: FatSecretKeys) =
+                        food("Unused barcode result", 40)
+
+                    override fun searchOff(query: String, page: Int) =
+                        FoodSearchPage(
+                            listOf(
+                                FoodSearchHit(
+                                    FoodSource.OFF,
+                                    "off-search-peppers",
+                                    food("Packaged red peppers", 31, 2.0)
+                                        .put("barcode", "000000000001")
+                                        .toString(),
+                                )
+                            ),
+                            false,
+                        )
+
+                    override fun searchFatSecret(query: String, page: Int, keys: FatSecretKeys) =
+                        FoodSearchPage(
+                            listOf(
+                                FoodSearchHit(
+                                    FoodSource.FATSECRET,
+                                    "fs-search-peppers",
+                                    food("Red bell pepper, raw", 40, 3.0)
+                                        .put("provider", "fatsecret")
+                                        .put("providerType", "Generic")
+                                        .put("providerFoodId", "synthetic-pepper")
+                                        .toString(),
+                                )
+                            ),
+                            false,
+                        )
+                }
+            v.refresh()
+            v.mode = "quick"
+            v.go("foods")
+        }
+        ui.onNode(hasSetTextAction()).performTextInput("pepper")
+        ui.onNodeWithText("Saved peppers").assertExists()
+        ui.onNodeWithText("Fiber —").assertExists()
+        ui.onNodeWithContentDescription("Search online").performClick()
+        ui.waitUntil(5000) {
+            val search =
+                androidx.lifecycle
+                    .ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+                    .nameSearch
+            search.submitted.isNotBlank() && !search.loading
+        }
+        ui.onNodeWithText("Red bell pepper, raw").assertExists()
+        ui.onNodeWithText("Packaged red peppers").assertExists()
+        ui.onNodeWithText("40 kcal").assertExists()
+        ui.onNodeWithText("Fiber 3 g").assertExists()
+        ui.onAllNodesWithText("1 medium · 120 g").assertCountEquals(3)
+        screenshot("food-name-search")
+        ui.onNodeWithText("Red bell pepper, raw").performClick()
+        ui.onNodeWithText("Quantity").performTextReplacement("2")
+        ui.onNodeWithText("Log food").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(
+                80.0,
+                v.repo.nutrition(v.repo.db.list("direct").single())[0],
+                0.0,
+            )
+            org.junit.Assert.assertEquals(2, v.repo.db.list("food").size)
+            v.credentialStore.clear()
+        }
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =

@@ -285,6 +285,37 @@ Resting expenditure accrues by elapsed fraction of the local calendar day, inclu
 before tracking start. See Expenditure above for the component calculation and legacy
 boundary. Current-week balance is only week-to-date, never an achieved full-week goal.
 
+## Search foods by name
+
+Quick log and Add ingredient cameras both offer **Search foods**; the Foods tab opens
+the same screen. Type a name and press the search icon or keyboard Search. Saved foods
+filter locally while typing; online queries are submitted explicitly rather than per
+keystroke. Saved/OFF/FatSecret filters and source labels make each result identifiable.
+FatSecret generic ingredients appear before its branded results. Preparation words
+such as raw/cooked remain in the provider's name; no automatic substitution is made.
+
+Tiles show the nutrition basis/serving description, explicit grams/ml when available,
+calories, protein and fiber on that basis. Unknown values show a dash. More results
+loads another page; failed pages can be retried without dropping previous results.
+Slow/unavailable providers, missing keys and rate limits do not hide saved or successful
+results from the other provider. Changed queries and revoked credentials reject stale
+responses. Search previews remain in memory and never become food history by themselves.
+
+OFF uses its dedicated `search.openfoodfacts.org/search` POST endpoint for text matching.
+One exact-barcode batch lookup supplies current label nutrition for the page; missing
+nutrition stays unknown if that request fails. Selecting an OFF result uses the normal
+barcode detail/archive pipeline and explicitly selects OFF. FatSecret uses Premier
+`foods/search/v6`, including standard servings and available nutrients. No photos are
+requested or retained. Both selected results open the existing portion screen for direct
+logging or dish ingredients. FatSecret food IDs allow later name-search selections to
+reuse a saved food ID; recorded ingredient snapshots stay independent. A saved search
+alias makes generic names easy to find offline under the original query.
+
+Sources: [OFF search API](https://openfoodfacts.github.io/search-a-licious/users/ref-openapi/),
+[OFF batch lookup](https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/ref-cheatsheet/),
+[FatSecret search](https://platform.fatsecret.com/docs/v6/foods.search).
+No SQL or portable-backup schema migration is needed for name search.
+
 ## Barcode sources and device credentials
 
 Quick log and dish ingredients share the portion screen's three source controls:
@@ -330,7 +361,8 @@ personal backups belong in Git.
 
 No analytics, photos or account registration for the tracker. Each explicit barcode
 scan prefetches Open Food Facts and, if configured, FatSecret—even when the saved
-food opens immediately. These requests send the barcode, not food history or backups.
+food opens immediately. Explicit online searches send the search text to those providers.
+These requests send only the requested barcode/query, not food history or backups.
 FatSecret credentials are device-only and excluded from exports and Android backup. Open Food Facts community data is licensed
 under ODbL; see https://world.openfoodfacts.org/data. Missing values never become zero.
 

@@ -30,6 +30,12 @@ interface FoodProviders {
 
     fun fatSecret(code: String, keys: FatSecretKeys): JSONObject
 
+    fun searchOff(query: String, page: Int): FoodSearchPage =
+        throw IllegalStateException("Search unavailable")
+
+    fun searchFatSecret(query: String, page: Int, keys: FatSecretKeys): FoodSearchPage =
+        throw IllegalStateException("Search unavailable")
+
     fun clearToken() {}
 }
 
@@ -39,6 +45,11 @@ class AndroidFoodProviders(private val db: Data) : FoodProviders {
     override fun off(code: String): JSONObject = FoodLookup.fetch(db, code)
 
     override fun fatSecret(code: String, keys: FatSecretKeys) = fatSecret.fetch(code, keys)
+
+    override fun searchOff(query: String, page: Int) = OffFoodSearch.search(query, page)
+
+    override fun searchFatSecret(query: String, page: Int, keys: FatSecretKeys) =
+        fatSecret.search(query, page, keys)
 
     override fun clearToken() {
         fatSecret.clearToken()
@@ -182,6 +193,28 @@ class FatSecretLookup(private val transport: ((String, String, String?) -> JSONO
         return parse(code, response.getJSONObject("food"))
     }
 
+    fun search(query: String, page: Int, keys: FatSecretKeys): FoodSearchPage {
+        val url =
+            "https://platform.fatsecret.com/rest/foods/search/v6?search_expression=" +
+                URLEncoder.encode(query, "UTF-8") +
+                "&page_number=$page&max_results=10&flag_default_serving=true&food_type=none&format=json"
+        val response = request(url, "Bearer " + token(keys))
+        response.optJSONObject("error")?.let {
+            when (it.optInt("code")) {
+                21 ->
+                    throw IllegalStateException(
+                        "FatSecret blocked this IP address. Check your account's IP restrictions."
+                    )
+                211 -> return FoodSearchPage(emptyList(), false)
+                else ->
+                    throw IllegalStateException(
+                        "FatSecret search failed. Check account access or try again."
+                    )
+            }
+        }
+        return FoodSearchParsing.fatSecret(response, page)
+    }
+
     companion object {
         fun gtin13(code: String): String {
             require(BarcodeValue.productCode(code) == code) { "Unsupported barcode" }
@@ -206,7 +239,6 @@ class FatSecretLookup(private val transport: ((String, String, String?) -> JSONO
                     ?: throw FoodNotFound("FatSecret has no serving information")
             val food =
                 JSONObject()
-                    .put("barcode", code)
                     .put("provider", "fatsecret")
                     .put("providerFoodId", product.getString("food_id"))
                     .put("providerServingId", serving.optString("serving_id"))
@@ -215,6 +247,8 @@ class FatSecretLookup(private val transport: ((String, String, String?) -> JSONO
                     .put("basis", 1)
                     .put("unit", "serving")
                     .put("servingLabel", serving.optString("serving_description"))
+            if (code.isNotBlank()) food.put("barcode", code)
+            food.put("providerType", product.optString("food_type"))
             val metric = serving.optDouble("metric_serving_amount", 0.0)
             if (metric.isFinite() && metric > 0) {
                 if (serving.optString("metric_serving_unit") == "g")

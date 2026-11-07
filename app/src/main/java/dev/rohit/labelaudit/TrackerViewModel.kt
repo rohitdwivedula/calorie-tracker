@@ -26,6 +26,16 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     var fatSecretConfigured by mutableStateOf(credentialStore.configured)
         private set
 
+    val nameSearch =
+        FoodNameSearch(
+            viewModelScope,
+            { foodProviders },
+            { credentialStore.read() },
+            { fatSecretConfigured },
+            saved.get<String>("foodSearchQuery") ?: "",
+            { saved["foodSearchQuery"] = it },
+        )
+    private var activeSearchAlias: String? = null
     private var lookupGeneration = 0
     private val foodJobs = mutableListOf<Job>()
     private var sourcePinned = false
@@ -391,6 +401,44 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         }
     }
 
+    fun chooseSearchFood(hit: FoodSearchHit) {
+        val f = JSONObject(hit.json)
+        val newMode = if (mode == "dish") "dish" else "quick"
+        mode = newMode
+        ingredientIndex = -1
+        if (hit.source == FoodSource.SAVED) {
+            chooseFood(f, newMode)
+            return
+        }
+        if (hit.source == FoodSource.OFF) {
+            // Search previews have selected fields. Fetch/archive the complete product
+            // only for the selected hit, using the existing barcode source pipeline.
+            startLookup(f.getString("barcode"), FoodSource.OFF, nameSearch.query.trim())
+            return
+        }
+        val local =
+            repo.db.list("food").firstOrNull {
+                it.optString("providerFoodId").isNotBlank() &&
+                    it.optString("providerFoodId") == f.optString("providerFoodId")
+            }
+        f.put("id", local?.getString("id") ?: UUID.randomUUID().toString())
+        if (local?.optString("barcode")?.isNotBlank() == true)
+            f.put("barcode", local.getString("barcode"))
+        f.put("searchAlias", nameSearch.query.trim())
+        chooseFood(f, newMode)
+        foodChoices =
+            mapOf(
+                hit.source to FoodChoice(LookupPhase.READY, foodJson),
+                FoodSource.SAVED to
+                    if (local != null) FoodChoice(LookupPhase.READY, local.toString())
+                    else FoodChoice(LookupPhase.NOT_FOUND),
+            )
+        selectedFoodSource = hit.source
+        saved["foodSource"] = hit.source.name
+        sourcePinned = true
+        requestedFoodSource = hit.source
+    }
+
     fun manualFood() {
         cancelFoodLookups()
         lookupBarcode = ""
@@ -412,12 +460,17 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
 
     private fun cancelFoodLookups() {
         lookupGeneration++
+        activeSearchAlias = null
         foodJobs.forEach { it.cancel() }
         // Retain canceled-but-running I/O so restore can join it before replacing the DB.
         foodJobs.removeAll { it.isCompleted }
     }
 
     fun lookup(raw: String) {
+        startLookup(raw)
+    }
+
+    private fun startLookup(raw: String, preferred: FoodSource? = null, alias: String? = null) {
         val code = BarcodeValue.productCode(raw)
         if (code == null) {
             error = "Unsupported barcode or QR code"
@@ -433,8 +486,9 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         saved["lookupBarcode"] = code
         lookupFallback = code
         lookupFoodId = local?.getString("id") ?: UUID.randomUUID().toString()
-        sourcePinned = false
-        requestedFoodSource = null
+        activeSearchAlias = alias
+        sourcePinned = preferred != null
+        requestedFoodSource = preferred
         selectedFoodSource = null
         saved.remove<String>("foodSource")
         foodChoices =
@@ -464,6 +518,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     private fun fetchSource(source: FoodSource) {
         val generation = lookupGeneration
         val code = lookupBarcode
+        val searchAlias = activeSearchAlias
         val sourceRevision = (sourceRevisions[source] ?: 0) + 1
         sourceRevisions[source] = sourceRevision
         val id =
@@ -487,6 +542,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
                                     )
                             }
                         result.put("id", id)
+                        searchAlias?.let { result.put("searchAlias", it) }
                         if (source == FoodSource.OFF) result.put("provider", "openfoodfacts")
                         FoodChoice(LookupPhase.READY, result.toString())
                     } catch (e: CancellationException) {
@@ -630,6 +686,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         credentialStore.save(FatSecretKeys(clientId, secret))
         fatSecretConfigured = true
         foodProviders.clearToken()
+        nameSearch.credentialsChanged()
         back()
         if (lookupBarcode.isNotBlank() && route == "portion") fetchSource(FoodSource.FATSECRET)
     }
@@ -639,6 +696,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         sourceRevisions[FoodSource.FATSECRET] = (sourceRevisions[FoodSource.FATSECRET] ?: 0) + 1
         fatSecretConfigured = false
         foodProviders.clearToken()
+        nameSearch.credentialsChanged()
         foodChoices = foodChoices + (FoodSource.FATSECRET to FoodChoice(LookupPhase.NEEDS_KEY))
         message = "FatSecret credentials removed"
     }
@@ -930,6 +988,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
             try {
                 stepsJob?.cancelAndJoin()
                 pendingStepDates.clear()
+                nameSearch.resetForRestore()
                 val activeFoodJobs = foodJobs.toList()
                 cancelFoodLookups()
                 activeFoodJobs.forEach { it.join() }
@@ -961,6 +1020,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     override fun onCleared() {
         super.onCleared()
         cancelFoodLookups()
+        nameSearch.cancel()
         repo.db.close()
     }
 }

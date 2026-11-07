@@ -21,7 +21,7 @@ class HealthPrivacyActivity : ComponentActivity() {
                                 "Step totals and sync times stay on this phone. They aren't uploaded. Explicit backup exports include saved step totals and sync times, separately from your food and activity records. You can revoke access in Android's Health Connect settings. Food logging continues without access."
                             )
                             Text(
-                                "Scans contact Open Food Facts and, when configured, FatSecret. API credentials stay on this device and are excluded from backups. No analytics or photos are collected."
+                                "Scans and online food searches contact Open Food Facts and, when configured, FatSecret. API credentials stay on this device and are excluded from backups. No analytics or photos are collected."
                             )
                             TextButton(onClick = { finish() }) { Text("Done") }
                         }

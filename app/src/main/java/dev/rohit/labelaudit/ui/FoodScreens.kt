@@ -15,85 +15,233 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.*
 import org.json.*
 
+private fun searchServing(food: JSONObject): String {
+    val basis = food.optDouble("basis", 1.0)
+    val unit = food.optString("unit")
+    if (unit != "serving") return "${fmt(basis)} $unit"
+    val label = food.optString("servingLabel").ifBlank { "1 serving" }
+    val prefix = if (basis == 1.0) label else "${fmt(basis)} × $label"
+    if (Portion.labelAmount(label, "g") > 0 || Portion.labelAmount(label, "ml") > 0) return prefix
+    return prefix +
+        when {
+            food.optDouble("servingGrams", 0.0) > 0 ->
+                " · ${fmt(basis * food.getDouble("servingGrams"))} g"
+            food.optDouble("servingMl", 0.0) > 0 ->
+                " · ${fmt(basis * food.getDouble("servingMl"))} mL"
+            else -> ""
+        }
+}
+
 @Composable
 fun FoodsScreen(v: TrackerViewModel, scan: () -> Unit, manual: () -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
+    val search = v.nameSearch
     val foods = remember(v.revision) { v.repo.db.list("food") }
+    var filter by rememberSaveable { mutableStateOf("All") }
+    val savedHits =
+        foods
+            .filter { FoodSearchParsing.savedMatches(it, search.query) }
+            .map { FoodSearchHit(FoodSource.SAVED, "saved-${it.getString("id")}", it.toString()) }
+    val online = listOf(FoodSource.FATSECRET, FoodSource.OFF).flatMap { search.state(it).hits }
+    val hits = (savedHits + online).filter { filter == "All" || it.source.name == filter }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    fun submit() {
+        keyboard?.hide()
+        search.search()
+    }
     LazyColumn(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxSize().imePadding(),
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             OutlinedTextField(
-                query,
-                { query = it },
+                search.query,
+                search::updateQuery,
                 Modifier.fillMaxWidth(),
-                placeholder = { Text("Search saved foods") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
+                label = { Text("Search foods") },
+                placeholder = { Text("e.g. red bell pepper") },
+                trailingIcon = {
+                    IconButton(onClick = ::submit, enabled = search.query.trim().length >= 2) {
+                        Icon(Icons.Default.Search, "Search online")
+                    }
+                },
                 singleLine = true,
+                keyboardOptions =
+                    KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions =
+                    androidx.compose.foundation.text.KeyboardActions(onSearch = { submit() }),
             )
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = scan, Modifier.weight(1f)) {
-                    Icon(Icons.Default.QrCodeScanner, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Scan")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("All" to "All", "SAVED" to "Saved", "OFF" to "OFF", "FATSECRET" to "FS")
+                    .forEach { (key, label) ->
+                        FilterChip(
+                            selected = filter == key,
+                            onClick = { filter = key },
+                            label = { Text(label) },
+                        )
+                    }
+            }
+        }
+        if (search.query.isBlank()) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = scan, Modifier.weight(1f)) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Scan")
+                    }
+                    OutlinedButton(onClick = { v.manualFood() }, Modifier.weight(1f)) {
+                        Text("New food")
+                    }
                 }
-                OutlinedButton(onClick = { v.manualFood() }, Modifier.weight(1f)) {
-                    Text("New food")
+            }
+            item { TextButton(onClick = manual) { Text("Enter barcode manually") } }
+        }
+        if (search.query.isNotBlank()) {
+            for (source in listOf(FoodSource.FATSECRET, FoodSource.OFF)) {
+                if (filter != "All" && filter != source.name) continue
+                val state = search.state(source)
+                if (
+                    state.phase in listOf(LookupPhase.IDLE, LookupPhase.NOT_FOUND) ||
+                        state.phase == LookupPhase.READY && state.hits.isNotEmpty()
+                )
+                    continue
+                item(key = "status-${source.name}") {
+                    when (state.phase) {
+                        LookupPhase.NEEDS_KEY ->
+                            TextButton(onClick = v::openFatSecretSettings) {
+                                Text("Connect FatSecret")
+                            }
+                        LookupPhase.LOADING ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Searching ${source.label}…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        LookupPhase.ERROR ->
+                            Column {
+                                Text(state.note, style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = { search.retry(source) }) {
+                                    Text("Retry ${source.label}")
+                                }
+                            }
+                        LookupPhase.READY ->
+                            if (state.hits.isEmpty())
+                                Text(
+                                    "No ${source.label} matches",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                        else -> {}
+                    }
                 }
             }
         }
-        item { TextButton(onClick = manual) { Text("Enter barcode manually") } }
-        items(
-            foods.filter { it.optString("name").contains(query, true) },
-            key = { it.getString("id") },
-        ) { f ->
+        items(hits, key = { it.key }) { hit ->
+            val f = JSONObject(hit.json)
             Card(
-                onClick = { v.chooseFood(f, if (v.mode == "dish") "dish" else "quick") },
+                onClick = {
+                    keyboard?.hide()
+                    v.chooseSearchFood(hit)
+                },
                 Modifier.fillMaxWidth(),
             ) {
-                ListItem(
-                    headlineContent = { Text(f.optString("name")) },
-                    supportingContent = {
-                        Text(
-                            "${fmt(f.getDouble("kcal"))} kcal / ${fmt(f.getDouble("basis"))} ${f.optString("unit")}"
-                        )
-                    },
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                v.mode = if (v.mode == "dish") "dish" else "library"
-                                v.setFood(JSONObject(f.toString()))
-                                v.editFood()
-                            }
-                        ) {
-                            Icon(Icons.Default.Edit, "Edit food")
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(f.optString("name"), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                hit.source.label +
+                                    if (f.optString("providerType") == "Generic")
+                                        " · Generic ingredient"
+                                    else if (f.optString("brand").isNotBlank())
+                                        " · " + f.optString("brand")
+                                    else "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                )
+                        if (hit.source == FoodSource.SAVED)
+                            IconButton(
+                                onClick = {
+                                    v.mode = if (v.mode == "dish") "dish" else "library"
+                                    v.setFood(JSONObject(f.toString()))
+                                    v.editFood()
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, "Edit ${f.optString("name")}")
+                            }
+                    }
+                    Text(
+                        searchServing(f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(if (f.has("kcal")) "${kcal(f.getDouble("kcal"))} kcal" else "— kcal")
+                        Text(
+                            "Protein " +
+                                if (f.has("protein")) "${fmt(f.getDouble("protein"))} g" else "—"
+                        )
+                        Text(
+                            "Fiber " + if (f.has("fiber")) "${fmt(f.getDouble("fiber"))} g" else "—"
+                        )
+                    }
+                }
             }
         }
-        if (foods.isEmpty())
+        if (search.query.isNotBlank() && search.submitted.isBlank())
+            item {
+                Text(
+                    "Tap Search to find ingredients and packaged foods online",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        if (search.submitted.isNotBlank() && !search.loading && hits.isEmpty())
             item {
                 EmptyState(
-                    Icons.Default.Kitchen,
-                    "Your food library",
-                    "Foods you scan and save will be available offline.",
+                    Icons.Default.Search,
+                    "No matching foods",
+                    "Try another name or enter nutrition manually.",
+                )
+                TextButton(onClick = v::manualFood) { Text("Create food manually") }
+            }
+        val remoteFilter =
+            FoodSource.entries.firstOrNull { it.name == filter && it != FoodSource.SAVED }
+        val hasMore =
+            listOf(FoodSource.OFF, FoodSource.FATSECRET).any {
+                (filter == "All" || it == remoteFilter) && search.state(it).hasMore
+            }
+        if (hasMore)
+            item {
+                TextButton(
+                    onClick = { search.more(remoteFilter) },
+                    enabled = !search.loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("More results")
+                }
+            }
+        if (foods.isEmpty() && search.query.isBlank())
+            item {
+                EmptyState(
+                    Icons.Default.Search,
+                    "Find an ingredient",
+                    "Search by name or scan a barcode. Saved foods work offline.",
                 )
             }
         item {
             Text(
-                "Open Food Facts · community data · ODbL",
+                "Open Food Facts · ODbL · fatsecret",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

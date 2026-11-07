@@ -1,39 +1,30 @@
-Pending local update — app 1.0.13, versionCode 15
+Pending local update — app 1.0.14, versionCode 16
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- Shared Quick log / Add ingredient screen has Saved, OFF and FS source controls.
-- Defaults: saved corrections first, then OFF, then FatSecret if OFF is unavailable
-  or required nutrition is incomplete. Remote lookups prefetch concurrently.
-- Saved foods open immediately offline. Late results never replace an explicit
-  choice/correction, a newer scan, or snapshots in earlier dishes and food logs.
-- Switching sources preserves entered physical amounts only with verified shared
-  units; otherwise it resets with a notice rather than assuming g=ml or scoop sizes.
-- FatSecret settings accept personal runtime credentials. The gray FS control
-  opens setup when keys are absent. Keystore-encrypted credentials live under
-  noBackupFilesDir, separate from SQLite, export and navigation/form state.
-- Removing/replacing keys invalidates tokens and in-flight results; token caching
-  avoids repeated authentication. Settings never waits on an authentication lock.
-- Missing nutrition remains unknown; provider names/brands and serving labels stay
-  visible. FatSecret handles explicit g/ml portions and normalized micronutrient units.
-- Includes the previous local saved-drafts fix: multiple durable cooking drafts,
-  resume/discard controls, schema-5 export with schemas 1–4 import supported.
-- Personal backups/reports remain off GitHub; private LAN delivery only.
+- Name search is available from Quick log and Add ingredient cameras and the Foods tab.
+- Combined saved/OFF/FatSecret results, source filters and generic-ingredient labels.
+- Tiles show serving basis/weight/volume, calories, protein and fiber; unknowns use a dash.
+- Explicit submit avoids per-keystroke API calls. Independent provider loading/errors,
+  pagination/retry/deduplication, stale-query and credential-revocation protections.
+- OFF uses dedicated full-text search and one barcode batch for page nutrition. Selecting
+  an OFF hit fetches and archives full product details; explicit selection beats defaults.
+- FatSecret uses Premier search v6 with label servings and existing secure credentials.
+- Selected foods reuse existing portion/dish flows. Generic provider IDs avoid duplicate
+  saved foods; saved aliases support offline lookup. Historical snapshots remain intact.
+- No SQL or backup schema change. Existing database version 4/backups 1–5 supported.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 138 tests passed, no failures/errors/skips. Includes source selection/fallback,
-  concurrency, stale responses, correction preservation, snapshot independence,
-  encrypted no-backup storage, export/restore exclusion, token lifetime/invalidation,
-  real Compose source controls/key-entry/quick-log/dish flows and existing accounting.
-- Production FatSecret client completed an authenticated barcode lookup and parsed
-  the expected named serving. Host credentials were never compiled into the app.
-- APK signature and 16 KB zip alignment verified; optimized/non-debuggable build retained.
-- Scanned all APK members and changed source/docs for real host credentials: none found.
-- Synthetic Compose preview reviewed. No physical Pixel camera/Keystore test available;
-  storage tests use real AES/GCM with an ephemeral key in place of the Android Keystore.
+- 152 tests passed with no failures/errors/skips, including real Compose search controls,
+  camera search entry without permission, source results/metrics, direct logging,
+  dish ingredients, offline reuse, pagination/retries and existing accounting regressions.
+- Live production clients searched both providers successfully for a raw ingredient.
+- APK signature, matching update certificate and 16 KB ZIP alignment verified.
+- All APK members scanned for real host credentials: none embedded.
+- Synthetic UI preview reviewed; no physical Pixel camera test performed.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6166225
-SHA256: 135b2e2cd1944f40dc0fe4ed0deb073eb1e8f039bea51e321c99dcf6725d5178
-Review: docs/screenshots/compose-food-source-picker.png
+Bytes: 6176465
+SHA256: e560456e1d60f081de87406958e12fc18e22513ac294c8bfe9558afa0fffd2a4
+Review: docs/screenshots/compose-food-name-search.png

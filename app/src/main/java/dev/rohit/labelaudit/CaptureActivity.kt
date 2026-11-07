@@ -148,14 +148,16 @@ class CaptureActivity : ComponentActivity() {
                                 Spacer(Modifier.width(8.dp))
                                 Text("Add calories")
                             }
+                        FilledTonalButton(
+                            onClick = { result("saved_foods") },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                        ) {
+                            Icon(Icons.Default.Search, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Search foods")
+                        }
                         if (intent.getBooleanExtra("ingredient", false))
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                FilledTonalButton(
-                                    onClick = { result("saved_foods") },
-                                    Modifier.weight(1f),
-                                ) {
-                                    Text("Saved foods")
-                                }
                                 OutlinedButton(
                                     onClick = { result("manual_food") },
                                     Modifier.weight(1f),

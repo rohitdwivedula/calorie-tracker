@@ -37,12 +37,18 @@ public final class FoodLookup {
     } finally {
       c.disconnect();
     }
+    return parseProduct(code, product, lookupId);
+  }
+
+  /** Shared projection for search previews and archived barcode detail responses. */
+  public static JSONObject parseProduct(String code, JSONObject product, String lookupId)
+      throws Exception {
     JSONObject f =
         new JSONObject()
             .put("barcode", code)
-            .put("lookupId", lookupId)
             .put("name", product.optString("product_name", ""))
             .put("brand", product.optString("brands", ""));
+    if (lookupId != null) f.put("lookupId", lookupId);
     JSONObject nutrients = product.optJSONObject("nutriments");
     String servingLabel = product.optString("serving_size", "");
     double grams = Portion.labelAmount(servingLabel, "g"),

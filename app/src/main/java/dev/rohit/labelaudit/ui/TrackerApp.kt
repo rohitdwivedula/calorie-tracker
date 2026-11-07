@@ -107,7 +107,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "Today" -> "Today"
             "history" -> "Your food log"
             "stats" -> "Nutrition trends"
-            "foods" -> if (v.mode == "dish") "Choose an ingredient" else "Saved foods"
+            "foods" -> if (v.mode == "dish") "Choose an ingredient" else "Search foods"
             "cook" -> "Cooking"
             "portion" -> "Portion size"
             "food-edit" -> "Food nutrition"
