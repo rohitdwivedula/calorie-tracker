@@ -258,6 +258,7 @@ public final class Data extends SQLiteOpenHelper {
     } else if (kind.equals("food")) {
       if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       number(j, "basis", 0.001, 100000);
+      if (j.has("labelPercentages")) LabelDailyValues.validate(j.getJSONObject("labelPercentages"));
       for (int n = 4; n < Nutrients.KEYS.length; n++)
         if (j.has(Nutrients.KEYS[n])) number(j, Nutrients.KEYS[n], 0, 100000);
       if (j.has("servingGrams")) number(j, "servingGrams", 0.001, 100000);

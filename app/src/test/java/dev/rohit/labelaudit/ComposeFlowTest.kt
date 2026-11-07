@@ -267,6 +267,85 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun manualIngredientShowsMissingCarbsInlineAndAcceptsExplicitZero() {
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Manual entry dish")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.mode = "dish"
+            v.manualFood()
+        }
+        ui.onNodeWithText("Food name").performTextInput("Synthetic ingredient")
+        ui.onNodeWithText("Calories (kcal)").performTextInput("99")
+        ui.onNodeWithText("Protein (g)").performTextInput("9")
+        ui.onNodeWithText("Fat (g)").performScrollTo().performTextInput("2.5")
+        ui.onNodeWithText("Continue").performClick()
+        ui.onNodeWithText("Required · enter 0 if the label says 0").assertIsDisplayed()
+        ui.onNodeWithText("Couldn't complete that").assertDoesNotExist()
+        screenshot("manual-required-field")
+        ui.onNodeWithText("Carbs (g)").performTextInput("0")
+        ui.onNodeWithText("Continue").performClick()
+        ui.onNodeWithText("Quantity").performTextReplacement("2")
+        ui.onNodeWithText("Add to dish").performClick()
+        ui.onNodeWithText("Synthetic ingredient").assertExists()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(198.0, v.repo.nutrition(v.draft)[0], 0.0)
+            val food = v.draft.getJSONArray("ingredients").getJSONObject(0).getJSONObject("food")
+            org.junit.Assert.assertEquals(0.0, food.getDouble("carbs"), 0.0)
+            org.junit.Assert.assertFalse(food.has("fiber"))
+        }
+    }
+
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun manualPercentEntrySupportsOlderLabelsAndStoresSourceAlongsideAmounts() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.mode = "quick"
+            v.manualFood()
+        }
+        ui.onNodeWithText("Food name").performTextInput("Percent entry example")
+        ui.onNodeWithText("Calories (kcal)").performTextInput("99")
+        ui.onNodeWithText("Protein (g)").performTextInput("9")
+        ui.onNodeWithText("Carbs (g)").performTextInput("0")
+        ui.onNodeWithText("Fat (g)").performScrollTo().performTextInput("2.5")
+        ui.onNodeWithText("Serving size, vitamins & minerals").performScrollTo().performClick()
+        ui.onNodeWithText("Vitamin A (µg, optional)").performScrollTo()
+        ui.onAllNodesWithText("% DV")[0].performClick()
+        ui.onNodeWithText("Percent Daily Value").performTextInput("10")
+        ui.onNodeWithText("Older US").performClick()
+        ui.onNodeWithText("Apply").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals("", v.field("food", "vitamin-a"))
+        }
+        ui.onAllNodesWithText("% DV")[0].performClick()
+        ui.onNodeWithText("Unknown or mixed").performClick()
+        ui.onNodeWithText("Retinol (preformed vitamin A)").performClick()
+        ui.onNodeWithText("≈ 150 µg per nutrition basis").assertExists()
+        screenshot("label-percent-entry")
+        ui.onNodeWithText("Apply").performClick()
+        ui.onNodeWithText("Calcium (mg, optional)").performScrollTo()
+        ui.onAllNodesWithText("% DV")[11].performClick()
+        ui.onNodeWithText("Percent Daily Value").performTextInput("10")
+        ui.onNodeWithText("≈ 100 mg per nutrition basis").assertExists()
+        ui.onNodeWithText("Apply").performClick()
+        ui.onNodeWithText("Continue").performClick()
+        ui.onNodeWithText("Log food").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val food = v.repo.db.list("food").single()
+            org.junit.Assert.assertEquals(.00015, food.getDouble("vitamin-a"), 1e-12)
+            org.junit.Assert.assertEquals(.1, food.getDouble("calcium"), 1e-12)
+            org.junit.Assert.assertEquals(
+                "retinol",
+                food.getJSONObject("labelPercentages").getJSONObject("vitamin-a").getString("form"),
+            )
+        }
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =

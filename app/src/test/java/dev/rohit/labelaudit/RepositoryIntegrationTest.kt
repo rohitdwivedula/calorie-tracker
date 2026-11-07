@@ -255,4 +255,78 @@ class RepositoryIntegrationTest {
         )
         r.db.close()
     }
+
+    @Test
+    fun labelPercentageInputsAndUnknownFormsSurviveBackupAndSnapshots() {
+        val r = TrackerRepository(context)
+        val f =
+            food()
+                .put(
+                    "labelPercentages",
+                    JSONObject()
+                        .put(
+                            "vitamin-a",
+                            LabelDailyValues.entry(
+                                "vitamin-a",
+                                10.0,
+                                LabelDailyValues.LEGACY,
+                                "unknown",
+                            ),
+                        )
+                        .put(
+                            "vitamin-c",
+                            LabelDailyValues.entry(
+                                "vitamin-c",
+                                20.0,
+                                LabelDailyValues.LEGACY,
+                                "unknown",
+                            ),
+                        ),
+                )
+                .put("vitamin-c", .012)
+        r.db.save("food", f)
+        val b =
+            batch()
+                .put(
+                    "ingredients",
+                    JSONArray().put(JSONObject().put("food", f).put("quantity", 100)),
+                )
+        r.db.save("batch", b)
+        val backup = r.db.backup()
+        r.db.restore(backup)
+        val restored = r.db.list("food").single()
+        assertFalse(restored.has("vitamin-a"))
+        assertEquals(.012, restored.getDouble("vitamin-c"), 1e-12)
+        assertEquals(
+            10.0,
+            restored
+                .getJSONObject("labelPercentages")
+                .getJSONObject("vitamin-a")
+                .getDouble("percent"),
+            0.0,
+        )
+        r.db.save("food", JSONObject(restored.toString()).put("vitamin-c", .02))
+        val snapshot =
+            r.db
+                .list("batch")
+                .single()
+                .getJSONArray("ingredients")
+                .getJSONObject(0)
+                .getJSONObject("food")
+        assertEquals(.012, snapshot.getDouble("vitamin-c"), 1e-12)
+        assertTrue(snapshot.has("labelPercentages"))
+        val bad = JSONObject(backup)
+        val rows = bad.getJSONArray("records")
+        for (i in 0 until rows.length()) {
+            val row = rows.getJSONObject(i)
+            if (row.getString("kind") == "food")
+                row.getJSONObject("data")
+                    .getJSONObject("labelPercentages")
+                    .getJSONObject("vitamin-c")
+                    .put("percent", -1)
+        }
+        assertThrows(Exception::class.java) { r.db.restore(bad.toString()) }
+        assertEquals(.02, r.db.list("food").single().getDouble("vitamin-c"), 1e-12)
+        r.db.close()
+    }
 }

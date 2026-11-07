@@ -1,30 +1,26 @@
-Pending local update — app 1.0.14, versionCode 16
+Pending local update — app 1.0.15, versionCode 17
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- Name search is available from Quick log and Add ingredient cameras and the Foods tab.
-- Combined saved/OFF/FatSecret results, source filters and generic-ingredient labels.
-- Tiles show serving basis/weight/volume, calories, protein and fiber; unknowns use a dash.
-- Explicit submit avoids per-keystroke API calls. Independent provider loading/errors,
-  pagination/retry/deduplication, stale-query and credential-revocation protections.
-- OFF uses dedicated full-text search and one barcode batch for page nutrition. Selecting
-  an OFF hit fetches and archives full product details; explicit selection beats defaults.
-- FatSecret uses Premier search v6 with label servings and existing secure credentials.
-- Selected foods reuse existing portion/dish flows. Generic provider IDs avoid duplicate
-  saved foods; saved aliases support offline lookup. Historical snapshots remain intact.
+- Manual food entry shows per-field errors instead of raw numeric parsing exceptions.
+- Calories/core macros require explicit values; optional missing nutrients remain unknown.
+- Vitamin/mineral % DV entry supports current and older general US food-label references.
+- Raw percentages, reference/version and nutrient form persist with foods and snapshots.
+- Legacy A/E/folate forms are explicit; unresolved forms preserve percent without guessing.
+- Untouched API nutrition retains full precision; explicit user edits replace values.
 - No SQL or backup schema change. Existing database version 4/backups 1–5 supported.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 152 tests passed with no failures/errors/skips, including real Compose search controls,
-  camera search entry without permission, source results/metrics, direct logging,
-  dish ingredients, offline reuse, pagination/retries and existing accounting regressions.
-- Live production clients searched both providers successfully for a raw ingredient.
-- APK signature, matching update certificate and 16 KB ZIP alignment verified.
-- All APK members scanned for real host credentials: none embedded.
-- Synthetic UI preview reviewed; no physical Pixel camera test performed.
+- 167 tests passed, no failures/errors/skips. Includes Compose manual ingredient flow,
+  inline validation, percent controls/conversions, snapshots and backup/restore.
+- Lint has existing warnings; no errors. No physical-device validation performed.
+- APK signature and 16 KB ZIP alignment verified; certificate matches prior releases.
+- Changed files and all APK members scanned for host credentials/private access keys: none.
+- Synthetic UI previews reviewed; no personal data included.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6176465
-SHA256: e560456e1d60f081de87406958e12fc18e22513ac294c8bfe9558afa0fffd2a4
-Review: docs/screenshots/compose-food-name-search.png
+Bytes: 6191961
+SHA256: 70cefa7046bff1025cf16b5a4a50a2d397b0b5d81a25c01572b535d75e929afe
+Review: docs/screenshots/compose-manual-required-field.png
+Review: docs/screenshots/compose-label-percent-entry.png

@@ -10,6 +10,8 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 - [Portion entry](compose-portion.png)
 - [Saved / OFF / FatSecret source picker](compose-food-source-picker.png)
 - [Name search results with nutrition](compose-food-name-search.png)
+- [Manual entry field validation](compose-manual-required-field.png)
+- [Vitamin percentage entry](compose-label-percent-entry.png)
 - [Calorie log date/time](compose-calorie-time.png)
 - [Daily balance](compose-balance-days.png)
 - [Expenditure breakdown](compose-expenditure.png)

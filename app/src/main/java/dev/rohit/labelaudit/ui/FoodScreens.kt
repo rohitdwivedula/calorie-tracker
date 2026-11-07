@@ -1,6 +1,7 @@
 @file:OptIn(
     androidx.compose.material3.ExperimentalMaterial3Api::class,
     androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
 
 package dev.rohit.labelaudit
@@ -8,6 +9,7 @@ package dev.rohit.labelaudit
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -255,22 +257,84 @@ fun FoodEditor(v: TrackerViewModel) {
     val scope = "food"
     val id = f.getString("id")
     var extras by rememberSaveable(id) { mutableStateOf(false) }
-    fun initial(key: String, index: Int = -1): String =
-        if (!f.has(key)) ""
-        else if (index >= 0) fmt(f.getDouble(key) * Nutrients.displayFactor(index))
-        else if (
-            key in listOf("basis", "kcal", "protein", "carbs", "fat", "servingGrams", "servingMl")
+    var errors by remember(id) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var validation by remember(id) { mutableIntStateOf(0) }
+    var percentKey by rememberSaveable(id) { mutableStateOf<String?>(null) }
+    fun initial(key: String) = FoodEntry.initial(f, key)
+    fun percentages() =
+        JSONObject(
+            v.field(
+                scope,
+                "labelPercentages",
+                f.optJSONObject("labelPercentages")?.toString() ?: "{}",
+            )
         )
-            fmt(f.getDouble(key))
-        else f.optString(key)
+    fun change(key: String, value: String) {
+        v.field(scope, key, value, true)
+        v.field(scope, "edited:$key", "true", true)
+        errors = errors - key
+        if (key in Nutrients.KEYS) {
+            val entries = percentages()
+            if (entries.has(key)) {
+                entries.remove(key)
+                v.field(scope, "labelPercentages", entries.toString(), true)
+                v.field(scope, "percentApplied:$key", "false", true)
+            }
+        }
+    }
+    @Composable
+    fun entryField(
+        key: String,
+        label: String,
+        numeric: Boolean = true,
+        default: String = initial(key),
+        modifier: Modifier = Modifier,
+        percent: Boolean = false,
+    ) {
+        val requester =
+            remember(id, key) { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        LaunchedEffect(validation, errors[key]) {
+            if (errors.keys.firstOrNull() == key) {
+                androidx.compose.runtime.withFrameNanos {}
+                requester.bringIntoView()
+            }
+        }
+        val recorded = percentages().optJSONObject(key)
+        Column(modifier.fillMaxWidth().then(Modifier.bringIntoViewRequester(requester))) {
+            OutlinedTextField(
+                v.field(scope, key, default),
+                { change(key, it) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(label) },
+                singleLine = true,
+                isError = errors.containsKey(key),
+                supportingText =
+                    if (errors.containsKey(key)) ({ Text(errors.getValue(key)) }) else null,
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text
+                    ),
+                trailingIcon =
+                    if (percent) ({ TextButton(onClick = { percentKey = key }) { Text("% DV") } })
+                    else null,
+            )
+            if (recorded != null)
+                Text(
+                    "Label: ${fmt(recorded.getDouble("percent"))}% DV · ${if (recorded.getString("standard") == LabelDailyValues.LEGACY) "older US" else "current US"}" +
+                        if (v.field(scope, key, default).isBlank()) " · amount unknown" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+        }
+    }
     Column(Modifier.fillMaxSize().imePadding()) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FormField(v, scope, "name", "Food name", initial("name"))
+            entryField("name", "Food name", numeric = false)
             Text(
-                "Enter the values printed on the label",
+                "Enter label values. Use 0 when the label says 0.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -278,20 +342,18 @@ fun FoodEditor(v: TrackerViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
-                    v.field(scope, "basis", initial("basis").ifBlank { "1" }),
-                    { v.field(scope, "basis", it, true) },
-                    Modifier.weight(1f),
-                    label = { Text("Nutrition per") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
+                entryField(
+                    "basis",
+                    "Nutrition per",
+                    default = initial("basis").ifBlank { "1" },
+                    modifier = Modifier.weight(1f),
                 )
                 val unit = v.field(scope, "unit", f.optString("unit", "serving"))
                 Column {
                     listOf("serving", "g", "ml").forEach { u ->
                         FilterChip(
                             selected = unit == u,
-                            onClick = { v.field(scope, "unit", u, true) },
+                            onClick = { change("unit", u) },
                             label = { Text(u) },
                         )
                     }
@@ -304,91 +366,85 @@ fun FoodEditor(v: TrackerViewModel) {
                     "fat" to "Fat (g)",
                     "fiber" to "Fiber (g, optional)",
                 )
-                .forEach { (key, label) ->
-                    FormField(
-                        v,
-                        scope,
-                        key,
-                        label,
-                        initial(key, if (key == "fiber") 4 else -1),
-                        true,
-                    )
-                }
+                .forEach { (key, label) -> entryField(key, label) }
             TextButton(onClick = { extras = !extras }) {
                 Icon(Icons.Default.Tune, null)
                 Spacer(Modifier.width(8.dp))
                 Text(if (extras) "Hide extra nutrition" else "Serving size, vitamins & minerals")
             }
             if (extras) {
-                FormField(
-                    v,
-                    scope,
-                    "servingGrams",
-                    "Grams in one serving (optional)",
-                    initial("servingGrams"),
-                    true,
+                entryField("servingGrams", "Grams in one serving (optional)")
+                entryField("servingMl", "mL in one serving (optional)")
+                Text(
+                    "Enter amounts or tap % DV for US food labels. Blank optional fields stay unknown.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                FormField(
-                    v,
-                    scope,
-                    "servingMl",
-                    "mL in one serving (optional)",
-                    initial("servingMl"),
-                    true,
-                )
-                for (i in 5 until Nutrients.KEYS.size) FormField(
-                    v,
-                    scope,
+                for (i in 5 until Nutrients.KEYS.size) entryField(
                     Nutrients.KEYS[i],
                     "${Nutrients.NAMES[i]} (${Nutrients.unit(i)}, optional)",
-                    initial(Nutrients.KEYS[i], i),
-                    true,
+                    percent = true,
                 )
             }
+            errors["labelPercentages"]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         Surface(tonalElevation = 3.dp) {
             Button(
                 onClick = {
-                    v.run {
-                        val j = JSONObject(f.toString())
-                        j.put("name", v.field(scope, "name", initial("name")).trim())
-                            .put("unit", v.field(scope, "unit", f.optString("unit", "serving")))
-                        for (key in listOf("basis", "kcal", "protein", "carbs", "fat")) {
-                            val input =
-                                v.field(
-                                    scope,
-                                    key,
-                                    initial(key).ifBlank { if (key == "basis") "1" else "" },
-                                )
-                            if (!f.has(key) || input != initial(key)) j.put(key, input.toDouble())
-                        }
-                        for (i in 4 until Nutrients.KEYS.size) {
-                            val key = Nutrients.KEYS[i]
-                            val input = v.field(scope, key, initial(key, i))
-                            if (input.isBlank()) j.remove(key)
-                            else if (!f.has(key) || input != initial(key, i))
-                                j.put(key, input.toDouble() / Nutrients.displayFactor(i))
-                        }
-                        for (key in listOf("servingGrams", "servingMl")) {
-                            val input = v.field(scope, key, initial(key))
-                            if (input.isBlank()) j.remove(key)
-                            else if (!f.has(key) || input != initial(key))
-                                j.put(key, input.toDouble())
-                        }
+                    val input =
+                        JSONObject(JSONObject(v.formJson).optJSONObject(scope)?.toString() ?: "{}")
+                    input.put("labelPercentages", percentages())
+                    val result = FoodEntry.build(f, input)
+                    errors = result.errors
+                    if (errors.isEmpty()) v.run { v.saveFood(result.food!!) }
+                    else {
                         if (
-                            j.optString("unit") != f.optString("unit") ||
-                                j.optDouble("servingGrams", 0.0) !=
-                                    f.optDouble("servingGrams", 0.0) ||
-                                j.optDouble("servingMl", 0.0) != f.optDouble("servingMl", 0.0)
+                            errors.keys.first() !in
+                                listOf(
+                                    "name",
+                                    "basis",
+                                    "unit",
+                                    "kcal",
+                                    "protein",
+                                    "carbs",
+                                    "fat",
+                                    "fiber",
+                                )
                         )
-                            j.remove("servingLabel")
-                        v.saveFood(j)
+                            extras = true
+                        validation++
                     }
                 },
                 Modifier.fillMaxWidth().padding(20.dp).heightIn(min = 52.dp),
             ) {
                 Text(if (v.mode == "library") "Save food" else "Continue")
             }
+        }
+    }
+    percentKey?.let { key ->
+        LabelPercentDialog(
+            key,
+            percentages().optJSONObject(key),
+            v.field(scope, "labelStandard", LabelDailyValues.CURRENT),
+            { percentKey = null },
+        ) { entry, grams ->
+            val entries = percentages().put(key, entry)
+            v.field(scope, "labelPercentages", entries.toString(), true)
+            v.field(scope, "percentApplied:$key", "true", true)
+            v.field(scope, "labelStandard", entry.getString("standard"), true)
+            val i = Nutrients.KEYS.indexOf(key)
+            v.field(
+                scope,
+                key,
+                grams?.let {
+                    java.math.BigDecimal.valueOf(it * Nutrients.displayFactor(i))
+                        .stripTrailingZeros()
+                        .toPlainString()
+                } ?: "",
+                true,
+            )
+            errors = errors - key
+            percentKey = null
         }
     }
 }

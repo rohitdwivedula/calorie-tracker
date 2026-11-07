@@ -100,6 +100,15 @@ use normalized mass values. Missing nutrients stay absent. Goals are stored with
 settings and included in backups. Old snapshots remain unchanged when saved food
 nutrition is updated; rescan to obtain optional values for future ingredients.
 
+Manual entry validates each field before saving. Calories and core macros require
+an explicit value (enter `0` when printed on the label); blank optional nutrients
+remain unknown. Under **Serving size, vitamins & minerals**, tap **% DV** beside a
+vitamin/mineral to enter a US label percentage. Choose Current US or Older US;
+the original percentage and reference are retained in foods, snapshots and backups.
+These label references are separate from personal RDA/AI targets. Unresolved older
+vitamin A/E/folate forms retain the percentage without inventing a nutrient amount.
+See [label references and conversions](docs/label-daily-values.md).
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting
