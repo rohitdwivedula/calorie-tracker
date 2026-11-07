@@ -109,6 +109,13 @@ These label references are separate from personal RDA/AI targets. Unresolved old
 vitamin A/E/folate forms retain the percentage without inventing a nutrient amount.
 See [label references and conversions](docs/label-daily-values.md).
 
+The manual editor's **JSON** button copies a label-transcription prompt and opens
+an import dialog. Send the prompt with a label photo to an app of your choice,
+then return, tap **Paste JSON → Fill form**, review and save normally. This app
+does not send photos or call an LLM. Imports replace nutrition fields in the form;
+unknown values remain blank and required fields still need explicit input.
+See the [label JSON format](docs/label-json.md).
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting

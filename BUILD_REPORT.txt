@@ -2,6 +2,10 @@ Pending local update — app 1.0.15, versionCode 17
 GitHub release publication requires user approval. No release published.
 
 Changes:
+- JSON button copies a label prompt; Paste JSON fills the manual form for review.
+- Explicit units, serving conversions, percent DVs and unknowns reuse manual validation.
+- Clipboard/dialog state survives activity recreation; invalid input leaves form unchanged.
+- No LLM calls, photo uploads or automatic saves; unsupported fields are rejected.
 - Manual food entry shows per-field errors instead of raw numeric parsing exceptions.
 - Calories/core macros require explicit values; optional missing nutrients remain unknown.
 - Vitamin/mineral % DV entry supports current and older general US food-label references.
@@ -12,15 +16,18 @@ Changes:
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 167 tests passed, no failures/errors/skips. Includes Compose manual ingredient flow,
+- 174 tests passed, no failures/errors/skips. Includes Compose manual ingredient flow,
   inline validation, percent controls/conversions, snapshots and backup/restore.
+- JSON tests cover clipboard handoff, recreation, preview before saving, units, nulls,
+  percentages, code fences and rejection of invalid values/versions/extra fields.
 - Lint has existing warnings; no errors. No physical-device validation performed.
 - APK signature and 16 KB ZIP alignment verified; certificate matches prior releases.
 - Changed files and all APK members scanned for host credentials/private access keys: none.
 - Synthetic UI previews reviewed; no personal data included.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6191961
-SHA256: 70cefa7046bff1025cf16b5a4a50a2d397b0b5d81a25c01572b535d75e929afe
+Bytes: 6197353
+SHA256: f31ff468fd89d3907d0778f4ef64db93d30a67251d9ce8535578d9b7d256200d
 Review: docs/screenshots/compose-manual-required-field.png
 Review: docs/screenshots/compose-label-percent-entry.png
+Review: docs/screenshots/compose-label-json-import.png

@@ -345,6 +345,63 @@ class ComposeFlowTest {
         }
     }
 
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun jsonButtonCopiesPromptThenPastedLabelFillsReviewFormWithoutSaving() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.mode = "quick"
+            v.manualFood()
+        }
+        ui.onNodeWithText("Food name").performTextInput("Keep my name")
+        ui.onNodeWithText("JSON").performClick()
+        ui.onNodeWithText("Import label JSON").assertExists()
+        ui.runOnIdle {
+            val clipboard =
+                ui.activity.getSystemService(android.content.ClipboardManager::class.java)
+            org.junit.Assert.assertTrue(
+                clipboard.primaryClip!!.getItemAt(0).text.toString().contains("schemaVersion")
+            )
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("invalid example", "{}"))
+        }
+        ui.onNodeWithText("Paste JSON").performClick()
+        ui.onNodeWithText("Fill form").performClick()
+        ui.onNodeWithText("Use schemaVersion 1 from the copied prompt").assertExists()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertTrue(v.repo.db.list("food").isEmpty())
+            ui.activity
+                .getSystemService(android.content.ClipboardManager::class.java)
+                .setPrimaryClip(
+                    android.content.ClipData.newPlainText(
+                        "synthetic label",
+                        """{"schemaVersion":1,"name":null,"basis":{"quantity":1,"unit":"serving","servingGrams":80},"nutrients":{"kcal":{"amount":99,"unit":"kcal"},"protein":{"amount":9,"unit":"g"},"carbs":{"amount":0,"unit":"g"},"fat":{"amount":2.5,"unit":"g"},"iron":{"percentDV":10,"standard":"us-current"}}}""",
+                    )
+                )
+        }
+        ui.onNodeWithText("Paste JSON").performClick()
+        ui.activityRule.scenario.recreate()
+        ui.onNodeWithText("Import label JSON").assertExists()
+        screenshot("label-json-import")
+        ui.onNodeWithText("Fill form").performClick()
+        ui.onNodeWithText("Import label JSON").assertDoesNotExist()
+        ui.onNodeWithText("Keep my name").assertExists()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertTrue(v.repo.db.list("food").isEmpty())
+        }
+        ui.onNodeWithText("Continue").performClick()
+        ui.onNodeWithText("Log food").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val food = v.repo.db.list("food").single()
+            org.junit.Assert.assertEquals("Keep my name", food.getString("name"))
+            org.junit.Assert.assertEquals(.0018, food.getDouble("iron"), 1e-12)
+            org.junit.Assert.assertFalse(food.has("fiber"))
+            org.junit.Assert.assertEquals(80.0, food.getDouble("servingGrams"), 0.0)
+        }
+    }
+
     @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {

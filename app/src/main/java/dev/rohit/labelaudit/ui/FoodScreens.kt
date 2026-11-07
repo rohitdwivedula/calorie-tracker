@@ -17,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.*
@@ -260,6 +262,8 @@ fun FoodEditor(v: TrackerViewModel) {
     var errors by remember(id) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var validation by remember(id) { mutableIntStateOf(0) }
     var percentKey by rememberSaveable(id) { mutableStateOf<String?>(null) }
+    var jsonDialog by rememberSaveable(id) { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
     fun initial(key: String) = FoodEntry.initial(f, key)
     fun percentages() =
         JSONObject(
@@ -332,6 +336,18 @@ fun FoodEditor(v: TrackerViewModel) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(LabelJson.prompt))
+                        jsonDialog = true
+                    }
+                ) {
+                    Icon(Icons.Default.DataObject, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("JSON")
+                }
+            }
             entryField("name", "Food name", numeric = false)
             Text(
                 "Enter label values. Use 0 when the label says 0.",
@@ -421,6 +437,19 @@ fun FoodEditor(v: TrackerViewModel) {
             }
         }
     }
+    if (jsonDialog)
+        LabelJsonDialog({ jsonDialog = false }) { fields ->
+            for (key in fields.keys()) {
+                v.field(scope, key, fields.get(key).toString(), true)
+                if (key in Nutrients.KEYS) {
+                    v.field(scope, "edited:$key", "true", true)
+                    v.field(scope, "percentApplied:$key", "false", true)
+                }
+            }
+            errors = emptyMap()
+            extras = true
+            jsonDialog = false
+        }
     percentKey?.let { key ->
         LabelPercentDialog(
             key,

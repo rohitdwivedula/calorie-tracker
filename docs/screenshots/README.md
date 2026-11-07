@@ -12,6 +12,7 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 - [Name search results with nutrition](compose-food-name-search.png)
 - [Manual entry field validation](compose-manual-required-field.png)
 - [Vitamin percentage entry](compose-label-percent-entry.png)
+- [Label JSON import](compose-label-json-import.png)
 - [Calorie log date/time](compose-calorie-time.png)
 - [Daily balance](compose-balance-days.png)
 - [Expenditure breakdown](compose-expenditure.png)
