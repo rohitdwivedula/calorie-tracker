@@ -1,33 +1,27 @@
-Pending local update — app 1.0.15, versionCode 17
+Pending local update — app 1.0.16, versionCode 18
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- JSON button copies a label prompt; Paste JSON fills the manual form for review.
-- Explicit units, serving conversions, percent DVs and unknowns reuse manual validation.
-- Clipboard/dialog state survives activity recreation; invalid input leaves form unchanged.
-- No LLM calls, photo uploads or automatic saves; unsupported fields are rejected.
-- Manual food entry shows per-field errors instead of raw numeric parsing exceptions.
-- Calories/core macros require explicit values; optional missing nutrients remain unknown.
-- Vitamin/mineral % DV entry supports current and older general US food-label references.
-- Raw percentages, reference/version and nutrient form persist with foods and snapshots.
-- Legacy A/E/folate forms are explicit; unresolved forms preserve percent without guessing.
-- Untouched API nutrition retains full precision; explicit user edits replace values.
-- No SQL or backup schema change. Existing database version 4/backups 1–5 supported.
+- Quick log and ingredient scanners have a bottom-right gallery barcode-image picker.
+- Top-right preview control switches front/rear cameras when both are available.
+- Image-only Android picker works without camera or broad storage/photo permission.
+- Images are scanned locally with ML Kit; no photos or persistent URI grants are saved.
+- Gallery pauses live detection to avoid competing results. Invalid/unsupported images
+  leave the scanner open with retry/manual options. Arbitrary QR URLs are not opened.
+- Lens choice survives activity recreation; torch resets on switching cameras.
+- Flash and camera switching disable when unsupported; no database/schema changes.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 174 tests passed, no failures/errors/skips. Includes Compose manual ingredient flow,
-  inline validation, percent controls/conversions, snapshots and backup/restore.
-- JSON tests cover clipboard handoff, recreation, preview before saving, units, nulls,
-  percentages, code fences and rejection of invalid values/versions/extra fields.
-- Lint has existing warnings; no errors. No physical-device validation performed.
-- APK signature and 16 KB ZIP alignment verified; certificate matches prior releases.
-- Changed files and all APK members scanned for host credentials/private access keys: none.
-- Synthetic UI previews reviewed; no personal data included.
+- 177 tests passed, no failures/errors/skips. Focused UI checks cover picker launch,
+  image-only selection without camera permission, cancellation, unreadable image,
+  manual fallback and disabled controls when no camera is available.
+- Lint has existing warnings, no errors. Physical camera switching and successful
+  photo barcode decoding have not been tested on a device/emulator.
+- APK signature, matching update certificate and 16 KB ZIP alignment verified.
+- Changed files and every APK member scanned for real host credentials/private keys:
+  none embedded. Signing keys/configuration/backup data are not committed.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6197353
-SHA256: f31ff468fd89d3907d0778f4ef64db93d30a67251d9ce8535578d9b7d256200d
-Review: docs/screenshots/compose-manual-required-field.png
-Review: docs/screenshots/compose-label-percent-entry.png
-Review: docs/screenshots/compose-label-json-import.png
+Bytes: 6220541
+SHA256: d16b8ac123e893176745b77e8b7d8c0b6885034da9ba8d2a58b028a612e89daf

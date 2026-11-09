@@ -116,6 +116,14 @@ does not send photos or call an LLM. Imports replace nutrition fields in the for
 unknown values remain blank and required fields still need explicit input.
 See the [label JSON format](docs/label-json.md).
 
+Quick log and ingredient cameras include **Flip camera** at the preview's top
+right and **Choose barcode image** at its bottom right. Gallery selection uses
+Android's image picker without broad photo/storage permission, and also works
+when camera permission is denied. Selected images are scanned locally for food
+barcodes/product QR codes using the same lookup flow; photos are not saved by the
+app. Cancelling or unreadable images leave manual entry available. Camera flip
+requires both front and rear cameras; flash is enabled only on a supported camera.
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting
