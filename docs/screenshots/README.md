@@ -8,6 +8,8 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 - [Today’s vitamins](compose-stats-today-vitamins.png)
 - [Nutrient reference profile](compose-nutrient-profile.png)
 - [Portion entry](compose-portion.png)
+- [Editable barcode on missing results](compose-barcode-not-found.png)
+- [Editable barcode on portion entry](compose-barcode-portion.png)
 - [Saved / OFF / FatSecret source picker](compose-food-source-picker.png)
 - [Name search results with nutrition](compose-food-name-search.png)
 - [Manual entry field validation](compose-manual-required-field.png)

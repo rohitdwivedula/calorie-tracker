@@ -124,6 +124,13 @@ barcodes/product QR codes using the same lookup flow; photos are not saved by th
 app. Cancelling or unreadable images leave manual entry available. Camera flip
 requires both front and rear cameras; flash is enabled only on a supported camera.
 
+Barcode-based lookups show a centered, editable barcode chip above the result,
+including loading, missing nutrition and successful portion screens. Tap it to
+correct the prefilled number and look up again. Leading zeros are preserved;
+invalid lengths are flagged without changing the current result. A new lookup
+resets the pending portion amount but preserves the cooking draft and existing
+food/history records. Manual and generic foods without a barcode have no chip.
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting

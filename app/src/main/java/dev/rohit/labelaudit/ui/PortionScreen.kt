@@ -8,6 +8,7 @@ package dev.rohit.labelaudit
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,13 +16,78 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import java.time.*
 import org.json.*
 
 @Composable
 fun PortionScreen(v: TrackerViewModel) {
+    val code = v.lookupBarcode
+    var editing by rememberSaveable(code) { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        if (code.isNotBlank())
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                SuggestionChip(
+                    onClick = { editing = true },
+                    label = { Text(code, fontFamily = FontFamily.Monospace) },
+                    icon = { Icon(Icons.Default.Edit, "Edit barcode", Modifier.size(16.dp)) },
+                )
+            }
+        Box(Modifier.weight(1f)) { PortionContent(v) }
+    }
+    if (editing) {
+        var input by
+            rememberSaveable(code, stateSaver = TextFieldValue.Saver) {
+                mutableStateOf(TextFieldValue(code, TextRange(0, code.length)))
+            }
+        var invalid by rememberSaveable(code) { mutableStateOf(false) }
+        fun submit() {
+            val corrected = input.text.trim()
+            if (!corrected.matches(Regex("[0-9]{8}|[0-9]{12,14}"))) invalid = true
+            else {
+                editing = false
+                v.lookup(corrected)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Edit barcode") },
+            text = {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        invalid = false
+                    },
+                    label = { Text("Barcode number") },
+                    singleLine = true,
+                    isError = invalid,
+                    supportingText =
+                        if (invalid) ({ Text("Enter 8, 12, 13 or 14 digits") }) else null,
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Search,
+                        ),
+                    keyboardActions = KeyboardActions(onSearch = { submit() }),
+                )
+            },
+            confirmButton = { TextButton(onClick = { submit() }) { Text("Look up") } },
+            dismissButton = { TextButton(onClick = { editing = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun PortionContent(v: TrackerViewModel) {
     if (!v.completeFood) {
         FoodLookupPlaceholder(v)
         return

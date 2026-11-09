@@ -1,27 +1,28 @@
-Pending local update — app 1.0.16, versionCode 18
+Pending local update — app 1.0.17, versionCode 19
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- Quick log and ingredient scanners have a bottom-right gallery barcode-image picker.
-- Top-right preview control switches front/rear cameras when both are available.
-- Image-only Android picker works without camera or broad storage/photo permission.
-- Images are scanned locally with ML Kit; no photos or persistent URI grants are saved.
-- Gallery pauses live detection to avoid competing results. Invalid/unsupported images
-  leave the scanner open with retry/manual options. Arbitrary QR URLs are not opened.
-- Lens choice survives activity recreation; torch resets on switching cameras.
-- Flash and camera switching disable when unsupported; no database/schema changes.
+- Centered editable barcode chip above loading, missing/incomplete and successful results.
+- Prefilled correction dialog preserves leading zeros, validates barcode length inline,
+  supports keyboard lookup and retains input across activity recreation.
+- Correcting a barcode reuses the existing generation-protected lookup flow and resets
+  the pending portion. Cancelling preserves the product/quantity. Cooking drafts and
+  existing food/history records remain intact. No database or backup schema changes.
+- Manual/generic foods without barcodes do not show the chip.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 177 tests passed, no failures/errors/skips. Focused UI checks cover picker launch,
-  image-only selection without camera permission, cancellation, unreadable image,
-  manual fallback and disabled controls when no camera is available.
-- Lint has existing warnings, no errors. Physical camera switching and successful
-  photo barcode decoding have not been tested on a device/emulator.
-- APK signature, matching update certificate and 16 KB ZIP alignment verified.
+- 178 tests passed, no failures/errors/skips. UI flow covers missing and successful
+  results, invalid input, leading zeros, recreation, cancel, quantity reset and dish
+  preservation. Existing stale-lookup/accounting regression checks also passed.
+- Synthetic not-found and portion previews reviewed at 320dp. No physical-device test.
+- Lint has existing warnings, no errors. APK signature, matching update certificate
+  and 16 KB ZIP alignment verified.
 - Changed files and every APK member scanned for real host credentials/private keys:
   none embedded. Signing keys/configuration/backup data are not committed.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6220541
-SHA256: d16b8ac123e893176745b77e8b7d8c0b6885034da9ba8d2a58b028a612e89daf
+Bytes: 6227529
+SHA256: da9ab1bb7106d1d3881b17f47103c1ad47780c0e14477bd996d13938366db9c3
+Review: docs/screenshots/compose-barcode-not-found.png
+Review: docs/screenshots/compose-barcode-portion.png

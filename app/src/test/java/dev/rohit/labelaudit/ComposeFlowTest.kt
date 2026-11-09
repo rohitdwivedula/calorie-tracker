@@ -266,6 +266,86 @@ class ComposeFlowTest {
         }
     }
 
+    @Config(qualifiers = "w320dp-h891dp-xhdpi")
+    @Test
+    fun barcodeCanBeCorrectedOnMissingAndSuccessfulResultsWithoutLosingDish() {
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Barcode correction dish")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            fun food(code: String, name: String) =
+                org.json
+                    .JSONObject()
+                    .put("id", "synthetic-$code")
+                    .put("barcode", code)
+                    .put("name", name)
+                    .put("basis", 1)
+                    .put("unit", "serving")
+                    .put("kcal", 90)
+                    .put("protein", 5)
+                    .put("carbs", 10)
+                    .put("fat", 2)
+            v.repo.db.save("food", food("000000000002", "First matched food"))
+            v.repo.db.save("food", food("000000000003", "Corrected matched food"))
+            v.foodProviders =
+                object : FoodProviders {
+                    override fun off(code: String): org.json.JSONObject =
+                        throw FoodNotFound("missing")
+
+                    override fun fatSecret(code: String, keys: FatSecretKeys): org.json.JSONObject =
+                        throw FoodNotFound("missing")
+                }
+            v.mode = "dish"
+            v.lookup("000000000001")
+        }
+        ui.waitUntil(10000) {
+            ui.onAllNodesWithText("No nutrition found").fetchSemanticsNodes().isNotEmpty()
+        }
+        ui.onNodeWithText("000000000001").assertIsDisplayed()
+        screenshot("barcode-not-found")
+        ui.onNodeWithContentDescription("Edit barcode").performClick()
+        ui.onNodeWithText("Barcode number").assertTextContains("000000000001")
+        ui.onNodeWithText("Barcode number").performTextReplacement("123")
+        ui.onNodeWithText("Look up").performClick()
+        ui.onNodeWithText("Enter 8, 12, 13 or 14 digits").assertExists()
+        ui.onNodeWithText("Barcode number").performTextReplacement("000000000002")
+        ui.activityRule.scenario.recreate()
+        ui.onNodeWithText("Barcode number").assertTextContains("000000000002")
+        ui.onNodeWithText("Look up").performClick()
+        ui.onNodeWithText("First matched food").assertExists()
+        ui.onNodeWithText("000000000002").assertIsDisplayed()
+        ui.onNodeWithText("Quantity").performTextReplacement("3")
+        ui.onNodeWithContentDescription("Edit barcode").performClick()
+        ui.onNodeWithText("Barcode number").performTextReplacement("000000000003")
+        ui.onNodeWithText("Cancel").performClick()
+        ui.onNodeWithText("Quantity").assertTextContains("3")
+        ui.onNodeWithText("000000000002").assertIsDisplayed()
+        ui.onNodeWithContentDescription("Edit barcode").performClick()
+        ui.onNodeWithText("Barcode number").performTextReplacement("000000000003")
+        ui.onNodeWithText("Look up").performClick()
+        ui.onNodeWithText("Corrected matched food").assertExists()
+        ui.onNodeWithText("Quantity").assertTextContains("1")
+        screenshot("barcode-portion")
+        ui.onNodeWithText("Add to dish").performClick()
+        ui.onNodeWithText("Barcode correction dish").assertExists()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val ingredients = v.draft.getJSONArray("ingredients")
+            org.junit.Assert.assertEquals(1, ingredients.length())
+            org.junit.Assert.assertEquals(
+                "000000000003",
+                ingredients.getJSONObject(0).getJSONObject("food").getString("barcode"),
+            )
+            org.junit.Assert.assertEquals(
+                "First matched food",
+                v.repo.db
+                    .list("food")
+                    .first { it.getString("barcode") == "000000000002" }
+                    .getString("name"),
+            )
+        }
+    }
+
     @Test
     fun manualIngredientShowsMissingCarbsInlineAndAcceptsExplicitZero() {
         ui.onNodeWithText("New dish").performClick()
@@ -285,6 +365,7 @@ class ComposeFlowTest {
         screenshot("manual-required-field")
         ui.onNodeWithText("Carbs (g)").performTextInput("0")
         ui.onNodeWithText("Continue").performClick()
+        ui.onNodeWithContentDescription("Edit barcode").assertDoesNotExist()
         ui.onNodeWithText("Quantity").performTextReplacement("2")
         ui.onNodeWithText("Add to dish").performClick()
         ui.onNodeWithText("Synthetic ingredient").assertExists()
