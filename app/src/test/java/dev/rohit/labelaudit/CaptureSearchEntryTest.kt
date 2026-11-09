@@ -72,4 +72,23 @@ class CaptureSearchEntryTest {
             .assertIsDisplayed()
             .assertIsEnabled()
     }
+
+    @Test
+    fun quickLogOffersManualFoodAndCaloriesAlongsideSearch() {
+        ui.onNodeWithText("Add calories").assertIsDisplayed()
+        ui.onNodeWithText("Search foods").assertIsDisplayed()
+        ui.onNodeWithText("Manual food").assertIsDisplayed().performClick()
+        assertEquals("manual_food", shadowOf(ui.activity).resultIntent.getStringExtra("action"))
+    }
+
+    @Test
+    fun ingredientCameraOffersSameActionsAndReturnsCaloriesAction() {
+        ui.activity.intent.putExtra("ingredient", true)
+        ui.activityRule.scenario.recreate()
+        ui.onNodeWithText("Scan ingredient").assertIsDisplayed()
+        ui.onNodeWithText("Manual food").assertIsDisplayed()
+        ui.onNodeWithText("Search foods").assertIsDisplayed()
+        ui.onNodeWithText("Add calories").assertIsDisplayed().performClick()
+        assertEquals("calories", shadowOf(ui.activity).resultIntent.getStringExtra("action"))
+    }
 }

@@ -191,15 +191,14 @@ class CaptureActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (intent.getBooleanExtra("quick_log", false))
-                            Button(
-                                onClick = { result("calories") },
-                                Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                            ) {
-                                Icon(Icons.Default.Add, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Add calories")
-                            }
+                        Button(
+                            onClick = { result("calories") },
+                            Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add calories")
+                        }
                         FilledTonalButton(
                             onClick = { result("saved_foods") },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
@@ -208,15 +207,12 @@ class CaptureActivity : ComponentActivity() {
                             Spacer(Modifier.width(8.dp))
                             Text("Search foods")
                         }
-                        if (intent.getBooleanExtra("ingredient", false))
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                OutlinedButton(
-                                    onClick = { result("manual_food") },
-                                    Modifier.weight(1f),
-                                ) {
-                                    Text("Manual food")
-                                }
-                            }
+                        OutlinedButton(
+                            onClick = { result("manual_food") },
+                            Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Manual food")
+                        }
                         TextButton(
                             onClick = { result("manual_barcode") },
                             Modifier.fillMaxWidth(),

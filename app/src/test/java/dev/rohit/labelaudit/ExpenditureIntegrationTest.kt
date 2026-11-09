@@ -431,4 +431,61 @@ class ExpenditureIntegrationTest {
         assertEquals(ratesBefore, r.db.list("rate").map { it.toString() })
         assertEquals(1766.0, r.restingRate(LocalDate.now(r.zone)), 0.0)
     }
+
+    @Test
+    fun calorieOnlyIngredientUsesBatchShareForIntakeAndFallbackDigestion() {
+        val food =
+            JSONObject()
+                .put("id", "calorie-ingredient")
+                .put("name", "Seasoning estimate")
+                .put("basis", 1)
+                .put("unit", "serving")
+                .put("kcal", 100)
+                .put("calorieOnly", true)
+        val batch =
+            JSONObject()
+                .put("id", "calorie-dish")
+                .put("name", "Test dish")
+                .put("available", time(day, 8))
+                .put("completed", JSONObject.NULL)
+                .put("share", 1)
+                .put("portionTracking", true)
+                .put(
+                    "ingredients",
+                    JSONArray().put(JSONObject().put("food", food).put("quantity", 1)),
+                )
+        r.db.save("batch", batch)
+        val now = time(day, 20)
+        assertEquals(0.0, r.nutrientTotals(time(day, 0), now, now).values[0], 0.0)
+        r.db.save("batch", BatchOperations.record(batch, .5, time(day, 12), "ate"))
+        val totals = r.nutrientTotals(time(day, 0), now, now)
+        assertEquals(50.0, totals.values[0], 0.0)
+        assertTrue(totals.missing[1])
+        assertFalse(totals.known[1])
+        assertEquals(4.0, r.dailyExpenditure(day, now).fallbackDigestion, 1e-9)
+        assertEquals(4.0, r.dailyExpenditure(day, now).digestion, 1e-9)
+        val saved = r.db.list("batch").single()
+        val known =
+            JSONObject()
+                .put("id", "known-ingredient")
+                .put("name", "Known nutrition")
+                .put("basis", 1)
+                .put("unit", "serving")
+                .put("kcal", 90)
+                .put("protein", 10)
+                .put("carbs", 5)
+                .put("fat", 2)
+        saved.getJSONArray("ingredients").put(JSONObject().put("food", known).put("quantity", 1))
+        r.db.save("batch", saved)
+        assertEquals(95.0, r.nutrientTotals(time(day, 0), now, now).values[0], 0.0)
+        assertEquals(9.93, r.dailyExpenditure(day, now).digestion, 1e-9)
+        val event = saved.getJSONArray("eatingEvents").getJSONObject(0)
+        event.put("fraction", .25)
+        r.db.save("batch", saved)
+        assertEquals(2.0, r.dailyExpenditure(day, now).fallbackDigestion, 1e-9)
+        saved.getJSONArray("eatingEvents").remove(0)
+        r.db.save("batch", saved)
+        assertEquals(0.0, r.dailyExpenditure(day, now).fallbackDigestion, 1e-9)
+        assertTrue(r.db.list("calorie").isEmpty())
+    }
 }

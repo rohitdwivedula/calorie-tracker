@@ -68,7 +68,7 @@ public final class TrackerRepository {
     for (int i = 0; i < a.length(); i++) {
       JSONObject x = a.getJSONObject(i), f = x.getJSONObject("food");
       double factor = x.getDouble("quantity") / f.getDouble("basis");
-      for (int k = 0; k < 4; k++) v[k] += f.getDouble(keys[k]) * factor;
+      for (int k = 0; k < 4; k++) v[k] += f.optDouble(keys[k], Double.NaN) * factor;
     }
     return v;
   }
@@ -107,6 +107,7 @@ public final class TrackerRepository {
     for (String kind : new String[] {"batch", "direct"})
       for (JSONObject j : db.list(kind)) {
         double fraction = batchFraction(j, from, to, now);
+        if (fraction <= 0) continue;
         double[] n = nutrition(j);
         for (int i = 0; i < 4; i++) sum[i] += n[i] * fraction;
       }
@@ -276,6 +277,22 @@ public final class TrackerRepository {
       long time = entry.getLong("time");
       if (time >= from && time < to) calorieOnlyKcal += entry.getDouble("kcal");
     }
+    // Calorie-only ingredients follow their batch's allocation, not the time they were added.
+    for (String kind : new String[] {"batch", "direct"})
+      for (JSONObject batch : db.list(kind)) {
+        double fraction = batchFraction(batch, from, to, now);
+        if (fraction <= 0) continue;
+        JSONArray ingredients = batch.getJSONArray("ingredients");
+        for (int i = 0; i < ingredients.length(); i++) {
+          JSONObject item = ingredients.getJSONObject(i), food = item.getJSONObject("food");
+          if (food.optBoolean("calorieOnly"))
+            calorieOnlyKcal +=
+                fraction
+                    * item.getDouble("quantity")
+                    / food.getDouble("basis")
+                    * food.getDouble("kcal");
+        }
+      }
     // Each calorie-only record uses the fallback INSTEAD of macro TEF. The public intake
     // nutrient totals still mark its macros unknown; no fabricated grams are persisted.
     return DailyExpenditure.calculate(

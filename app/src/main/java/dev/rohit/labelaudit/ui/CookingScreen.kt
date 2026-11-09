@@ -49,7 +49,9 @@ fun CookScreen(v: TrackerViewModel, scan: () -> Unit) {
                         Column(Modifier.weight(1f).clickable { v.chooseFood(f, "dish", i) }) {
                             Text(f.optString("name"), style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "${fmt(item.getDouble("quantity"))} ${f.optString("unit")}",
+                                if (f.optBoolean("calorieOnly"))
+                                    "${fmt(f.getDouble("kcal") * item.getDouble("quantity") / f.getDouble("basis"))} kcal · macros unknown"
+                                else "${fmt(item.getDouble("quantity"))} ${f.optString("unit")}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }

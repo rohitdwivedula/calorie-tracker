@@ -83,11 +83,9 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         }
     fun scan(ingredient: Boolean) {
         v.mode = if (ingredient) "dish" else "quick"
-        if (ingredient) v.ingredientIndex = -1
+        v.ingredientIndex = -1
         scanner.launch(
-            Intent(context, CaptureActivity::class.java)
-                .putExtra("ingredient", ingredient)
-                .putExtra("quick_log", !ingredient)
+            Intent(context, CaptureActivity::class.java).putExtra("ingredient", ingredient)
         )
     }
     val export =
@@ -118,7 +116,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "energy" -> "Expenditure"
             "activity" -> "Activity calories"
             "details" -> "Dish details"
-            "calories" -> "Quick log"
+            "calories" -> if (v.isDishCalories) "Add calories" else "Quick log"
             else -> "Nutrition"
         }
     val snack = remember { SnackbarHostState() }
@@ -187,19 +185,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                 when (v.route) {
                     "Today" -> TodayScreen(v, { scan(false) }, ::connectSteps)
                     "cook" -> CookScreen(v, { scan(true) })
-                    "foods" ->
-                        FoodsScreen(
-                            v,
-                            {
-                                if (v.mode != "dish") v.mode = "quick"
-                                scanner.launch(
-                                    Intent(context, CaptureActivity::class.java)
-                                        .putExtra("ingredient", v.mode == "dish")
-                                        .putExtra("quick_log", v.mode != "dish")
-                                )
-                            },
-                            { manualBarcode = true },
-                        )
+                    "foods" -> FoodsScreen(v, { scan(v.mode == "dish") }, { manualBarcode = true })
                     "portion" -> PortionScreen(v)
                     "food-edit" -> FoodEditor(v)
                     "fatsecret-settings" -> FatSecretSettingsScreen(v)

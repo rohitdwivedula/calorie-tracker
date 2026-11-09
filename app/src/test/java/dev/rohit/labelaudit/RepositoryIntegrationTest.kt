@@ -329,4 +329,29 @@ class RepositoryIntegrationTest {
         assertEquals(.02, r.db.list("food").single().getDouble("vitamin-c"), 1e-12)
         r.db.close()
     }
+
+    @Test
+    fun calorieOnlySnapshotRequiresExplicitFlagAndNeverInventsMacroZeroes() {
+        val f =
+            JSONObject()
+                .put("id", "calorie-estimate")
+                .put("name", "Approximate seasoning")
+                .put("unit", "serving")
+                .put("basis", 1)
+                .put("kcal", 100)
+        assertThrows(Exception::class.java) { Data.validate("food", f) }
+        f.put("calorieOnly", true)
+        Data.validate("food", f)
+        assertThrows(Exception::class.java) {
+            Data.validate("food", JSONObject(f.toString()).put("protein", 0))
+        }
+        assertThrows(Exception::class.java) {
+            Data.validate("food", JSONObject(f.toString()).put("calorieOnly", "true"))
+        }
+        val full =
+            FoodEntry.build(f, JSONObject().put("protein", "1").put("carbs", "2").put("fat", "3"))
+                .food!!
+        assertFalse(full.has("calorieOnly"))
+        Data.validate("food", full)
+    }
 }

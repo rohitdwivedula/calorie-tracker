@@ -29,7 +29,10 @@ fun CaloriesScreen(v: TrackerViewModel) {
     val recordedTime =
         v.field("calories", "time", existing?.optLong("time")?.toString() ?: "").toLongOrNull()
     Page {
-        Section("Just the calories", "Macros will remain unknown") {
+        Section(
+            if (v.isDishCalories) "Calories for this dish" else "Just the calories",
+            "Macros will remain unknown",
+        ) {
             FormField(
                 v,
                 "calories",
@@ -39,17 +42,18 @@ fun CaloriesScreen(v: TrackerViewModel) {
                 true,
             )
             FormField(v, "calories", "name", "Name (optional)", existing?.optString("name") ?: "")
-            TextButton(
-                onClick = { showTime = true },
-                modifier = Modifier.semantics { contentDescription = "Edit eating time" },
-            ) {
-                Icon(Icons.Default.Schedule, null)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (recordedTime == null) "When · now"
-                    else "When · " + whenText(recordedTime, v.repo.zone)
-                )
-            }
+            if (!v.isDishCalories)
+                TextButton(
+                    onClick = { showTime = true },
+                    modifier = Modifier.semantics { contentDescription = "Edit eating time" },
+                ) {
+                    Icon(Icons.Default.Schedule, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (recordedTime == null) "When · now"
+                        else "When · " + whenText(recordedTime, v.repo.zone)
+                    )
+                }
             Button(
                 onClick = {
                     v.run {
@@ -67,7 +71,7 @@ fun CaloriesScreen(v: TrackerViewModel) {
                 },
                 Modifier.fillMaxWidth(),
             ) {
-                Text("Save")
+                Text(if (v.isDishCalories) "Add to dish" else "Save")
             }
         }
         if (existing != null)

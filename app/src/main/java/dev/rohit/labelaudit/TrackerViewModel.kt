@@ -392,6 +392,21 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
                     .toString(),
                 true,
             )
+        if (newMode == "dish" && f.optBoolean("calorieOnly")) {
+            beginCalories()
+            val quantity =
+                if (index >= 0)
+                    draft.getJSONArray("ingredients").getJSONObject(index).getDouble("quantity")
+                else 1.0
+            field("calories", "name", f.optString("name"), true)
+            field(
+                "calories",
+                "kcal",
+                fmt(f.getDouble("kcal") * quantity / f.getDouble("basis")),
+                true,
+            )
+            return
+        }
         try {
             Data.validate("food", food)
             go("portion")
@@ -826,13 +841,40 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         home()
     }
 
+    val isDishCalories
+        get() = saved.get<String>("caloriesTarget") == "dish"
+
     fun beginCalories(existing: JSONObject? = null) {
+        saved["caloriesTarget"] = if (existing == null && mode == "dish") "dish" else "log"
         selectedId = existing?.getString("id") ?: ""
         clearForm("calories")
         go("calories")
     }
 
     fun saveCalories(name: String, kcal: Double, time: Long? = null) {
+        require(kcal.isFinite() && kcal >= .001 && kcal <= 100000) {
+            "Enter calories between 0.001 and 100,000"
+        }
+        if (isDishCalories) {
+            val d = draft
+            val ingredients = d.getJSONArray("ingredients")
+            val food =
+                JSONObject()
+                    .put("id", UUID.randomUUID().toString())
+                    .put("name", name.ifBlank { "Extra calories" })
+                    .put("basis", 1)
+                    .put("unit", "serving")
+                    .put("kcal", kcal)
+                    .put("calorieOnly", true)
+            Data.validate("food", food)
+            val item = JSONObject().put("food", food).put("quantity", 1)
+            if (ingredientIndex >= 0) ingredients.put(ingredientIndex, item)
+            else ingredients.put(item)
+            setDraft(d)
+            go("cook")
+            refresh()
+            return
+        }
         val d =
             if (selectedId.isEmpty()) JSONObject().put("time", System.currentTimeMillis())
             else record("calorie", selectedId)

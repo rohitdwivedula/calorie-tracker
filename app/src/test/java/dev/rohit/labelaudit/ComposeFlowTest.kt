@@ -484,6 +484,52 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun caloriesCanBeAddedAndEditedInsideDishWithoutLoggingImmediateIntake() {
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Synthetic seasoning dish")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.mode = "dish"
+            v.ingredientIndex = -1
+            v.beginCalories()
+        }
+        ui.onNodeWithText("When · now").assertDoesNotExist()
+        ui.onNodeWithText("Calories (kcal)").performTextInput("100")
+        ui.onNodeWithText("Name (optional)").performTextInput("Seasoning estimate")
+        ui.onNodeWithText("Add to dish").performClick()
+        ui.onNodeWithText("100 kcal · macros unknown").assertExists()
+        ui.onNodeWithText("Seasoning estimate").performClick()
+        ui.onNodeWithText("Calories (kcal)").assertTextContains("100")
+        ui.onNodeWithText("Calories (kcal)").performTextReplacement("120")
+        ui.activityRule.scenario.recreate()
+        ui.onNodeWithText("Calories (kcal)").assertTextContains("120")
+        ui.onNodeWithText("Add to dish").performClick()
+        ui.onNodeWithText("120 kcal · macros unknown").assertExists()
+        screenshot("dish-calorie-ingredient")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertTrue(v.repo.db.list("calorie").isEmpty())
+            org.junit.Assert.assertTrue(v.repo.db.list("direct").isEmpty())
+            org.junit.Assert.assertTrue(v.repo.db.list("food").isEmpty())
+            org.junit.Assert.assertEquals(1, v.draft.getJSONArray("ingredients").length())
+            val food = v.draft.getJSONArray("ingredients").getJSONObject(0).getJSONObject("food")
+            org.junit.Assert.assertFalse(food.has("protein"))
+            org.junit.Assert.assertTrue(food.getBoolean("calorieOnly"))
+            org.junit.Assert.assertEquals(120.0, v.repo.nutrition(v.draft)[0], 0.0)
+            org.junit.Assert.assertTrue(v.repo.batchNutrients(v.draft, 1.0).missing[1])
+        }
+        ui.onNodeWithText("Done cooking").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val backup = v.repo.db.backup()
+            v.repo.db.restore(backup)
+            val batch = v.repo.db.list("batch").single()
+            org.junit.Assert.assertEquals(120.0, v.repo.nutrition(batch)[0], 0.0)
+            org.junit.Assert.assertTrue(v.repo.batchNutrients(batch, 1.0).missing[1])
+        }
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =

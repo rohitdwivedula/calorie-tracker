@@ -94,6 +94,8 @@ object FoodEntry {
                 result.optDouble("servingMl", 0.0) != original.optDouble("servingMl", 0.0)
         )
             result.remove("servingLabel")
+        if (errors.isEmpty())
+            result.remove("calorieOnly") // Full manual nutrition replaces an energy-only estimate.
         return FoodEntryResult(if (errors.isEmpty()) result else null, errors)
     }
 }

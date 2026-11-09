@@ -265,7 +265,19 @@ public final class Data extends SQLiteOpenHelper {
       if (j.has("servingMl")) number(j, "servingMl", 0.001, 100000);
       if (!Arrays.asList("g", "serving", "ml").contains(j.getString("unit")))
         throw new Exception("Invalid unit");
-      for (String k : new String[] {"kcal", "protein", "carbs", "fat"}) number(j, k, 0, 100000);
+      number(j, "kcal", 0, 100000);
+      if (j.has("calorieOnly") && !(j.get("calorieOnly") instanceof Boolean))
+        throw new Exception("Invalid calorie-only flag");
+      if (j.optBoolean("calorieOnly")) {
+        if (j.optJSONObject("labelPercentages") != null
+            && j.getJSONObject("labelPercentages").length() > 0)
+          throw new Exception("Calorie-only nutrition cannot contain nutrient percentages");
+        for (int i = 1; i < Nutrients.KEYS.length; i++)
+          if (j.has(Nutrients.KEYS[i]))
+            throw new Exception("Calorie-only nutrition must leave other nutrients unknown");
+      } else {
+        for (String k : new String[] {"protein", "carbs", "fat"}) number(j, k, 0, 100000);
+      }
     } else if (kind.equals("batch") || kind.equals("direct")) {
       if (!draft && j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       if (!draft || j.has("available")) number(j, "available", 0, 32503680000000d);

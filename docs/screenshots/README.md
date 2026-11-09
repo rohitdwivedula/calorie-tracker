@@ -5,6 +5,7 @@ graphics and synthetic food data. They are not screenshots from the user's phone
 
 - [Today](compose-today.png)
 - [Saved cooking drafts](compose-drafts.png)
+- [Calories-only dish ingredient](compose-dish-calorie-ingredient.png)
 - [Today’s vitamins](compose-stats-today-vitamins.png)
 - [Nutrient reference profile](compose-nutrient-profile.png)
 - [Portion entry](compose-portion.png)

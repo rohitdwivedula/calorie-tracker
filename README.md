@@ -131,6 +131,21 @@ invalid lengths are flagged without changing the current result. A new lookup
 resets the pending portion amount but preserves the cooking draft and existing
 food/history records. Manual and generic foods without a barcode have no chip.
 
+Quick log and Add ingredient use the same camera activity and expose the same
+actions: scan/gallery, search, manual food, manual barcode and Add calories. Only
+the destination changes. Quick log saves intake; Add ingredient changes the dish
+draft. Both reuse the food editor, portion screen and lookup providers. Camera
+launching also uses one shared path.
+
+**Add calories** within a dish creates an editable/removable calories-only
+ingredient snapshot (for example, a seasoning estimate). Its macros/nutrients are
+absent, not zero. It is not saved as an immediate intake log or a library food.
+The calories follow the dish's existing portion/allocation policy, including the
+8% digestion fallback on the allocated calories. Changing the estimate updates
+future calculations; duplication and backup/restore preserve the snapshot.
+Existing databases/backups remain supported without a schema migration. Backups
+containing these new snapshots require an app version that understands them.
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting
