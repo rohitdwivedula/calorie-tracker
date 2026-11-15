@@ -138,7 +138,9 @@ fun HistoryScreen(v: TrackerViewModel) {
                         Instant.ofEpochMilli(item.time)
                             .atZone(v.repo.zone)
                             .format(DateTimeFormatter.ofPattern("HH:mm")),
-                        Modifier.width(44.dp),
+                        Modifier.widthIn(min = 52.dp),
+                        maxLines = 1,
+                        softWrap = false,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -178,6 +180,14 @@ fun HistoryScreen(v: TrackerViewModel) {
                                 )
                             else {
                                 val total = v.repo.batchNutrients(item.record, item.fraction)
+                                if (item.kind == "direct")
+                                    LoggedAmount.single(item.record, item.fraction)?.let { amount ->
+                                        Text(
+                                            amount,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 Text(
                                     (if (item.kind == "batch")
                                         "${fmt(item.fraction*100)}% of dish · "

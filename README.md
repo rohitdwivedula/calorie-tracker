@@ -146,6 +146,15 @@ future calculations; duplication and backup/restore preserve the snapshot.
 Existing databases/backups remain supported without a schema migration. Backups
 containing these new snapshots require an app version that understands them.
 
+Entering Search foods starts a fresh query, filter and list position, including
+return navigation. Rotation/activity recreation preserves typing in progress.
+Saved foods remain available offline; only the transient search state resets.
+History tiles and direct-food details show consumed amounts from ingredient
+snapshots, such as `2 servings · 120 g`. Serving equivalents require an explicit
+saved grams/mL conversion; nutrition basis or calories never imply a serving size.
+Corrected consumed shares scale the displayed amount, and later library edits
+do not change historical quantities. Dish events continue to show percent eaten.
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting

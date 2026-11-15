@@ -68,10 +68,12 @@ fun DetailsScreen(v: TrackerViewModel) {
                 else if (v.selectedKind == "direct") "Logged food" else "Whole dish",
                 r.nutrientText(totals, 0),
             )
+            if (v.selectedKind == "direct")
+                LoggedAmount.single(b, fraction)?.let { InfoRow("Amount", it) }
             InfoRow("Protein", r.nutrientText(totals, 1))
             InfoRow("Fiber", r.nutrientText(totals, 4))
         }
-        if (v.selectedKind == "batch")
+        if (v.selectedKind == "batch" || b.getJSONArray("ingredients").length() > 1)
             Section("Ingredients") {
                 val ingredients = b.getJSONArray("ingredients")
                 for (i in 0 until ingredients.length()) {
@@ -87,7 +89,7 @@ fun DetailsScreen(v: TrackerViewModel) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(food.optString("name"), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            "${fmt(x.getDouble("quantity") * fraction)} ${food.optString("unit")} · ${if (fraction == 1.0) "whole dish" else "in this portion"}",
+                            "${LoggedAmount.food(food, x.getDouble("quantity") * fraction) ?: "Calories only"} · ${if (fraction == 1.0) "whole dish" else "in this portion"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -99,7 +101,8 @@ fun DetailsScreen(v: TrackerViewModel) {
                     }
                     if (i < ingredients.length() - 1) HorizontalDivider()
                 }
-                TextButton(onClick = { v.beginCook(b) }) { Text("Edit ingredients") }
+                if (v.selectedKind == "batch")
+                    TextButton(onClick = { v.beginCook(b) }) { Text("Edit ingredients") }
             }
         Section("Recorded details") {
             if (v.selectedKind == "batch")

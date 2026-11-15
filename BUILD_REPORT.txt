@@ -1,33 +1,27 @@
-Pending local update — app 1.0.17, versionCode 19
+Pending local update — app 1.0.18, versionCode 20
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- Quick log and ingredient cameras share all actions: scan/gallery, search, manual food,
-  manual barcode and Add calories. One camera launch path; context changes destination.
-- Calories in a dish create editable/removable ingredient snapshots with explicit
-  calorieOnly=true and absent macros/nutrients. No immediate intake/library food is saved.
-- Calorie-only ingredients follow batch allocations and the existing 8% TEF fallback;
-  mixed known macros retain their normal TEF, with no double counting.
-- Unknown values remain unknown in summaries. Full manual corrections clear the
-  calorie-only marker. Quick-log calorie history/time editing remains independent.
-- Centered editable barcode on loading, missing/incomplete and successful results.
-  Leading zeros and dialog state survive recreation; correction keeps the dish draft.
-- Existing SQL version 4/backups 1–5 remain supported. New ingredient snapshots need
-  this version or later to restore; no schema migration or replacement is required.
+- Navigation into Search foods clears the prior query and provider results; filters
+  and list position reset. Activity recreation preserves an in-progress search.
+- History and direct-food details show consumed servings and grams/mL when a saved
+  conversion exists. Quantities use the logged snapshot/share, never current library
+  data, calories or nutrition basis as a serving-size guess. Dish percentages remain.
+- Multi-ingredient direct-food details expose the individual ingredient amounts.
+- History timestamps use a wider, single-line layout.
+- No database/backup schema change or modifications to recorded facts.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 183 tests passed, no failures/errors/skips. Covers both camera action sets, calorie
-  ingredient create/edit/recreate, no immediate log, snapshot backup/restore, missing
-  macro validation and full-nutrition correction; allocated intake/TEF including mixed
-  ingredients, portion corrections/deletion, and existing barcode/accounting checks.
-- Synthetic UI previews reviewed. No physical-device test.
+- 191 tests passed, no failures/errors/skips. New checks cover search/filter resets,
+  recreation/back navigation, logged quantities and corrected shares, historical
+  snapshots after a library correction, valid mass/volume conversions and unknowns.
+- Synthetic history and details previews reviewed. No physical-device validation.
 - Lint has existing warnings, no errors. APK signature, matching update certificate
   and 16 KB ZIP alignment verified. Changed files/APK scanned for host secrets: none.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6227937
-SHA256: a3172b73e5df2c48f03bc174bc64182aaa631ff40036bb0dcb74fbfc28b615ef
-Review: docs/screenshots/compose-barcode-not-found.png
-Review: docs/screenshots/compose-barcode-portion.png
-Review: docs/screenshots/compose-dish-calorie-ingredient.png
+Bytes: 6229189
+SHA256: e2749b2e7fc3f467d44635f05ad64ae3a007cebc2b8fc5308624998038d0d671
+Review: docs/screenshots/compose-history-quantities.png
+Review: docs/screenshots/compose-direct-food-quantity.png

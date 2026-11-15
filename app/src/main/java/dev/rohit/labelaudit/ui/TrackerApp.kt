@@ -185,7 +185,10 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                 when (v.route) {
                     "Today" -> TodayScreen(v, { scan(false) }, ::connectSteps)
                     "cook" -> CookScreen(v, { scan(true) })
-                    "foods" -> FoodsScreen(v, { scan(v.mode == "dish") }, { manualBarcode = true })
+                    "foods" ->
+                        key(v.foodSearchVisit) {
+                            FoodsScreen(v, { scan(v.mode == "dish") }, { manualBarcode = true })
+                        }
                     "portion" -> PortionScreen(v)
                     "food-edit" -> FoodEditor(v)
                     "fatsecret-settings" -> FatSecretSettingsScreen(v)

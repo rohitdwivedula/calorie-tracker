@@ -226,7 +226,17 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         }
     }
 
+    var foodSearchVisit by mutableIntStateOf(saved.get<Int>("foodSearchVisit") ?: 0)
+        private set
+
+    private fun freshFoodSearch() {
+        nameSearch.updateQuery("")
+        foodSearchVisit++
+        saved["foodSearchVisit"] = foodSearchVisit
+    }
+
     fun go(next: String) {
+        if (next == "foods") freshFoodSearch()
         history.show(route, next, route)
         route = next
         saveNavigation()
@@ -235,6 +245,7 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     fun back() {
         history.back()?.let {
             route = it.route
+            if (route == "foods") freshFoodSearch()
             if (route == "Today") refresh()
             if (route == "portion") selectDefaultFood()
             saveNavigation()

@@ -530,6 +530,66 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun searchStartsBlankOnEachVisitButKeepsTypingThroughRecreation() {
+        ui.onNodeWithText("Foods").performClick()
+        ui.onNode(hasSetTextAction()).performTextInput("old search")
+        ui.onNodeWithText("Saved").performClick()
+        ui.activityRule.scenario.recreate()
+        ui.onNode(hasSetTextAction()).assertTextContains("old search")
+        ui.onNodeWithText("Today", useUnmergedTree = true).performClick()
+        ui.onNodeWithText("Foods").performClick()
+        ui.onNode(hasSetTextAction()).assertTextEquals("", "Search foods")
+        ui.onNodeWithText("All").assertIsSelected()
+        ui.onNode(hasSetTextAction()).performTextInput("another search")
+        ui.onNodeWithContentDescription("Settings").performClick()
+        ui.onNodeWithContentDescription("Back").performClick()
+        ui.onNode(hasSetTextAction()).assertTextEquals("", "Search foods")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals("", v.nameSearch.query)
+            org.junit.Assert.assertEquals("", v.nameSearch.submitted)
+            org.junit.Assert.assertTrue(v.nameSearch.states.isEmpty())
+        }
+    }
+
+    @Test
+    fun historyAndDirectFoodDetailsShowServingsFromSavedSnapshotAndShare() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val f =
+                org.json
+                    .JSONObject()
+                    .put("id", "synthetic-portions")
+                    .put("name", "Synthetic patties")
+                    .put("unit", "g")
+                    .put("basis", 60)
+                    .put("servingGrams", 60)
+                    .put("kcal", 120)
+                    .put("protein", 1)
+                    .put("carbs", 20)
+                    .put("fat", 4)
+            v.mode = "quick"
+            v.chooseFood(f)
+            v.addFood(120.0)
+            // A later library correction must not rewrite the logged portion conversion.
+            v.repo.db.save("food", org.json.JSONObject(f.toString()).put("servingGrams", 30))
+            v.go("history")
+        }
+        ui.onNodeWithText("2 servings · 120 g").assertIsDisplayed()
+        screenshot("history-quantities")
+        ui.onNodeWithText("Synthetic patties").performClick()
+        ui.onNodeWithText("2 servings · 120 g").assertIsDisplayed()
+        screenshot("direct-food-quantity")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val direct = v.repo.db.list("direct").single().put("share", .5)
+            v.repo.db.save("direct", direct)
+            v.refresh()
+        }
+        ui.onNodeWithText("1 serving · 60 g").assertExists()
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =
