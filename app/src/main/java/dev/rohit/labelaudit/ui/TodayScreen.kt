@@ -43,36 +43,9 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             HorizontalDivider()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Protein",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(r.nutrientText(totals, 1), style = MaterialTheme.typography.titleLarge)
-                    if (r.goal(1) > 0)
-                        Text(
-                            "of ${fmt(r.goal(1))} g ${if(r.customGoal(1)) "goal" else r.goalBasis(1)}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Fiber",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(r.nutrientText(totals, 4), style = MaterialTheme.typography.titleLarge)
-                    if (r.goal(4) > 0)
-                        Text(
-                            "of ${fmt(r.goal(4))} g ${if(r.customGoal(4)) "goal" else r.goalBasis(4)}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                }
-            }
+            MacroSummary(r, totals, showGoals = true)
             ExpenditureBreakdown(v, today, connectSteps, compact = true, asOf = now)
-            if (totals.missing[1] || totals.missing[4])
+            if ((1..4).any { totals.missing[it] })
                 Text(
                     "Some nutrients are unknown · ≥ is a known minimum",
                     style = MaterialTheme.typography.labelSmall,

@@ -54,6 +54,16 @@ fun CookScreen(v: TrackerViewModel, scan: () -> Unit) {
                                 else "${fmt(item.getDouble("quantity"))} ${f.optString("unit")}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            MacroSummary(
+                                v.repo,
+                                Nutrients.Total().apply {
+                                    add(
+                                        v.repo.nutrientValues(f),
+                                        item.getDouble("quantity") / f.getDouble("basis"),
+                                    )
+                                },
+                                compact = true,
+                            )
                         }
                         IconButton(onClick = { v.removeIngredient(i) }) {
                             Icon(Icons.Default.Close, "Remove ${f.optString("name")}")
@@ -67,8 +77,9 @@ fun CookScreen(v: TrackerViewModel, scan: () -> Unit) {
                 Text("Add ingredient")
             }
             if (ingredients.length() > 0) {
-                val n = v.repo.nutrition(d)
-                InfoRow("Whole dish", "${fmt(n[0])} kcal")
+                val n = v.repo.batchNutrients(d, 1.0)
+                InfoRow("Whole dish", v.repo.nutrientText(n, 0))
+                MacroSummary(v.repo, n)
             }
             TextButton(onClick = { showTime = true }) {
                 Icon(Icons.Default.Schedule, null, Modifier.size(18.dp))

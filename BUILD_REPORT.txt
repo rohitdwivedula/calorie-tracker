@@ -1,27 +1,28 @@
-Pending local update — app 1.0.18, versionCode 20
+Pending local update — app 1.0.19, versionCode 21
 GitHub release publication requires user approval. No release published.
 
 Changes:
-- Navigation into Search foods clears the prior query and provider results; filters
-  and list position reset. Activity recreation preserves an in-progress search.
-- History and direct-food details show consumed servings and grams/mL when a saved
-  conversion exists. Quantities use the logged snapshot/share, never current library
-  data, calories or nutrition basis as a serving-size guess. Dish percentages remain.
-- Multi-ingredient direct-food details expose the individual ingredient amounts.
-- History timestamps use a wider, single-line layout.
-- No database/backup schema change or modifications to recorded facts.
+- Protein, fiber, carbs and fat together in cooking totals and each ingredient tile.
+- Shared MacroSummary on Today, History, search, food/dish details and ingredient
+  contributions, plus balance summaries. Compact wrapping text in lists; two-column
+  totals preserve the existing protein/fiber goal notes on Today.
+- Portion entry, manual food entry and Stats already expose all four.
+- Missing values remain unknown; partial totals retain their known-minimum marker.
+  Whole-batch, label-basis and consumed-portion quantities use existing calculations.
+- No changes to nutrition/accounting calculations, records, database or backup schema.
 
 Validation:
 - assembleRelease, assembleDebug, testDebugUnitTest, lintDebug and lintRelease passed.
-- 191 tests passed, no failures/errors/skips. New checks cover search/filter resets,
-  recreation/back navigation, logged quantities and corrected shares, historical
-  snapshots after a library correction, valid mass/volume conversions and unknowns.
-- Synthetic history and details previews reviewed. No physical-device validation.
+- 192 tests passed, no failures/errors/skips. New UI checks cover all four cooking
+  totals, unknown calorie-only ingredients, removal/recalculation, consumed portions
+  on Today/History/details and search tiles. Existing accounting tests passed.
+- Synthetic cooking, Today and History previews reviewed. No physical-device test.
 - Lint has existing warnings, no errors. APK signature, matching update certificate
   and 16 KB ZIP alignment verified. Changed files/APK scanned for host secrets: none.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6229189
-SHA256: e2749b2e7fc3f467d44635f05ad64ae3a007cebc2b8fc5308624998038d0d671
-Review: docs/screenshots/compose-history-quantities.png
-Review: docs/screenshots/compose-direct-food-quantity.png
+Bytes: 6230245
+SHA256: 337f1581718d4a116fdda3a9a2519ea38c803b14876dd49afed492401410a7a0
+Review: docs/screenshots/compose-cooking-macro-totals.png
+Review: docs/screenshots/compose-today-all-macros.png
+Review: docs/screenshots/compose-history-all-macros.png

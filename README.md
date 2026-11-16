@@ -155,6 +155,15 @@ saved grams/mL conversion; nutrition basis or calories never imply a serving siz
 Corrected consumed shares scale the displayed amount, and later library edits
 do not change historical quantities. Dish events continue to show percent eaten.
 
+Protein, fiber, carbs and fat are visible together in cooking totals/ingredient
+tiles, Today, food/dish details and contributions, History, food search results
+and balance summaries. These use a shared `MacroSummary` component with compact
+wrapping rows for lists and a two-column grid for totals. Existing portion entry,
+manual food entry and Stats already expose all four. Missing values show `—`;
+partially known totals retain the `≥` minimum marker. Cooking uses the whole dish,
+while logged food and dish portions show the consumed share. Calories-only logs
+continue to identify their macros as unknown. Calculation/storage are unchanged.
+
 ## Expenditure
 
 Today compares expenditure accrued so far with intake recorded so far. Resting

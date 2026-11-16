@@ -190,16 +190,12 @@ fun FoodsScreen(v: TrackerViewModel, scan: () -> Unit, manual: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(if (f.has("kcal")) "${kcal(f.getDouble("kcal"))} kcal" else "— kcal")
-                        Text(
-                            "Protein " +
-                                if (f.has("protein")) "${fmt(f.getDouble("protein"))} g" else "—"
-                        )
-                        Text(
-                            "Fiber " + if (f.has("fiber")) "${fmt(f.getDouble("fiber"))} g" else "—"
-                        )
-                    }
+                    Text(if (f.has("kcal")) "${kcal(f.getDouble("kcal"))} kcal" else "— kcal")
+                    MacroSummary(
+                        v.repo,
+                        Nutrients.Total().apply { add(v.repo.nutrientValues(f), 1.0) },
+                        compact = true,
+                    )
                 }
             }
         }

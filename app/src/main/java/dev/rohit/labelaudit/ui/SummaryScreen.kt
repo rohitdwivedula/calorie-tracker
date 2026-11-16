@@ -161,8 +161,7 @@ fun SummaryScreen(v: TrackerViewModel) {
                 "Estimated expenditure",
                 if (shown.loggedDays == 0) "—" else "${kcal(shown.expenditure)} kcal",
             )
-            InfoRow("Protein", r.nutrientText(shown.nutrition, 1))
-            InfoRow("Fiber", r.nutrientText(shown.nutrition, 4))
+            MacroSummary(r, shown.nutrition)
             TextButton(
                 enabled = shown.loggedDays > 0,
                 onClick = {

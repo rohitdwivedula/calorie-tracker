@@ -130,3 +130,56 @@ fun EmptyState(icon: ImageVector, title: String, body: String) {
         )
     }
 }
+
+/** One missing-aware macro presentation for totals and compact ingredient/log tiles. */
+@Composable
+fun MacroSummary(
+    repo: TrackerRepository,
+    total: Nutrients.Total,
+    compact: Boolean = false,
+    showGoals: Boolean = false,
+) {
+    val order = listOf(1, 4, 2, 3) // Keep protein/fiber first, consistently across screens.
+    if (compact) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            order.forEach { i ->
+                Text(
+                    "${Nutrients.NAMES[i]} ${repo.nutrientText(total, i)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            order.chunked(2).forEach { indices ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    indices.forEach { i ->
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                Nutrients.NAMES[i],
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                repo.nutrientText(total, i),
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                            if (showGoals && i in listOf(1, 4) && repo.goal(i) > 0)
+                                Text(
+                                    "of ${fmt(repo.goal(i))} g ${if (repo.customGoal(i)) "goal" else repo.goalBasis(i)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -250,6 +250,8 @@ class ComposeFlowTest {
         ui.onNodeWithText("40 kcal").assertExists()
         ui.onNodeWithText("Fiber 3 g").assertExists()
         ui.onAllNodesWithText("1 medium · 120 g").assertCountEquals(3)
+        ui.onAllNodesWithText("Carbs 8 g").assertCountEquals(3)
+        ui.onAllNodesWithText("Fat 0 g").assertCountEquals(3)
         screenshot("food-name-search")
         ui.onNodeWithText("Red bell pepper, raw").performClick()
         ui.onNodeWithText("Quantity").performTextReplacement("2")
@@ -590,6 +592,58 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun cookingTotalsShowAllFourMacrosAndTrackUnknownsAndPortionsAcrossScreens() {
+        ui.onNodeWithText("New dish").performClick()
+        ui.onNodeWithText("Dish name").performTextInput("Synthetic macro dish")
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val f =
+                org.json
+                    .JSONObject()
+                    .put("id", "synthetic-macros")
+                    .put("name", "Synthetic ingredient")
+                    .put("unit", "g")
+                    .put("basis", 100)
+                    .put("kcal", 150)
+                    .put("protein", 10)
+                    .put("carbs", 20)
+                    .put("fat", 5)
+                    .put("fiber", 2)
+            v.chooseFood(f, "dish")
+            v.addFood(200.0)
+            v.beginCalories()
+            v.saveCalories("Approximate addition", 100.0)
+        }
+        for (value in listOf("≥20 g", "≥40 g", "≥10 g", "≥4 g")) ui.onNodeWithText(value)
+            .performScrollTo()
+            .assertIsDisplayed()
+        ui.onNodeWithText("400 kcal").performScrollTo().assertIsDisplayed()
+        screenshot("cooking-macro-totals")
+        ui.onNodeWithContentDescription("Remove Approximate addition")
+            .performScrollTo()
+            .performClick()
+        for (value in listOf("20 g", "40 g", "10 g", "4 g")) ui.onNodeWithText(value)
+            .performScrollTo()
+            .assertIsDisplayed()
+        ui.onNodeWithText("Done cooking").performClick()
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            v.recordPortion(v.repo.db.list("batch").single().getString("id"), .5)
+        }
+        for (label in listOf("Protein", "Fiber", "Carbs", "Fat")) ui.onNodeWithText(label)
+            .assertExists()
+        screenshot("today-all-macros")
+        ui.onNodeWithText("History").performClick()
+        for (label in listOf("Protein 10 g", "Fiber 2 g", "Carbs 20 g", "Fat 5 g")) ui
+            .onNodeWithText(label)
+            .assertIsDisplayed()
+        screenshot("history-all-macros")
+        ui.onNodeWithText("Synthetic macro dish").performClick()
+        for (label in listOf("Protein", "Fiber", "Carbs", "Fat")) ui.onNodeWithText(label)
+            .assertExists()
+    }
+
+    @Test
     fun calorieLogAndHistoryUseMaterialScreens() {
         ui.runOnIdle {
             val owner =
@@ -693,12 +747,12 @@ class ComposeFlowTest {
         }
         ui.onNodeWithText("Seitan pasta").performClick()
         ui.onNodeWithText("Edit portion").assertIsDisplayed()
-        ui.onNodeWithText("180 kcal").assertExists()
+        ui.onAllNodesWithText("180 kcal").assertCountEquals(2)
         ui.onNodeWithText("Synthetic seitan").assertIsDisplayed()
         ui.onNodeWithText("90 g · in this portion").assertIsDisplayed()
         screenshot("dish-portion-details")
         ui.onNodeWithText("Whole dish").performClick()
-        ui.onNodeWithText("600 kcal").assertExists()
+        ui.onAllNodesWithText("600 kcal").assertCountEquals(2)
         ui.onNodeWithText("300 g · whole dish").assertIsDisplayed()
         ui.onNodeWithContentDescription("Back").performClick()
         ui.onNodeWithText("Seitan pasta").assertIsDisplayed()

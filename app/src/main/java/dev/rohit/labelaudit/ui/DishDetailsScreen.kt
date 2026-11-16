@@ -70,8 +70,7 @@ fun DetailsScreen(v: TrackerViewModel) {
             )
             if (v.selectedKind == "direct")
                 LoggedAmount.single(b, fraction)?.let { InfoRow("Amount", it) }
-            InfoRow("Protein", r.nutrientText(totals, 1))
-            InfoRow("Fiber", r.nutrientText(totals, 4))
+            MacroSummary(r, totals)
         }
         if (v.selectedKind == "batch" || b.getJSONArray("ingredients").length() > 1)
             Section("Ingredients") {
@@ -94,10 +93,11 @@ fun DetailsScreen(v: TrackerViewModel) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "${r.nutrientText(contribution, 0)} · Protein ${r.nutrientText(contribution, 1)} · Fiber ${r.nutrientText(contribution, 4)}",
+                            r.nutrientText(contribution, 0),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        MacroSummary(r, contribution, compact = true)
                     }
                     if (i < ingredients.length() - 1) HorizontalDivider()
                 }

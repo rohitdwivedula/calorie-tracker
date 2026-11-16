@@ -196,11 +196,7 @@ fun HistoryScreen(v: TrackerViewModel) {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Text(
-                                    "Protein ${v.repo.nutrientText(total,1)} · Fiber ${v.repo.nutrientText(total,4)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                MacroSummary(v.repo, total, compact = true)
                             }
                         }
                     }
