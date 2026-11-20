@@ -339,7 +339,7 @@ class RepositoryIntegrationTest {
                 .put("unit", "serving")
                 .put("basis", 1)
                 .put("kcal", 100)
-        assertThrows(Exception::class.java) { Data.validate("food", f) }
+        Data.validate("food", f)
         f.put("calorieOnly", true)
         Data.validate("food", f)
         assertThrows(Exception::class.java) {

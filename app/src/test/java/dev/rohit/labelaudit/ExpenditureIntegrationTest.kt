@@ -272,9 +272,9 @@ class ExpenditureIntegrationTest {
             .getJSONArray("ingredients")
             .getJSONObject(0)
             .getJSONObject("food")
-            .put("protein", 150)
+            .put("protein", 120)
         r.db.save("batch", recorded)
-        assertEquals(first + 25, r.dailyExpenditure(day, now).digestion, 1e-8)
+        assertEquals(first + 10, r.dailyExpenditure(day, now).digestion, 1e-8)
         assertEquals(500.0, r.nutrientTotals(r.midnight(day), now, now).values[0], 0.0)
     }
 
@@ -430,6 +430,47 @@ class ExpenditureIntegrationTest {
         r.reload()
         assertEquals(ratesBefore, r.db.list("rate").map { it.toString() })
         assertEquals(1766.0, r.restingRate(LocalDate.now(r.zone)), 0.0)
+    }
+
+    @Test
+    fun partialLabelsAndConflictsAreEvaluatedPerIngredient() {
+        val foods = JSONArray()
+        fun add(id: String, kcal: Int, protein: Int?, fat: Int? = null) {
+            val food =
+                JSONObject()
+                    .put("id", id)
+                    .put("name", id)
+                    .put("unit", "serving")
+                    .put("basis", 1)
+                    .put("kcal", kcal)
+            protein?.let { food.put("protein", it) }
+            fat?.let { food.put("fat", it) }
+            foods.put(JSONObject().put("food", food).put("quantity", 1))
+        }
+        add("partial", 430, 28, 15)
+        add("protein only", 1000, 10)
+        add("typo", 100, 100)
+        add("label without macros", 200, null)
+        val instant = time(day, 8)
+        val record =
+            JSONObject()
+                .put("id", "partial-test")
+                .put("name", "Synthetic meal")
+                .put("available", instant)
+                .put("completed", instant)
+                .put("share", 1)
+                .put("ingredients", foods)
+        r.db.save("direct", record)
+        r.db.restore(r.db.backup())
+        val now = time(day, 12)
+        val estimate = r.dailyExpenditure(day, now)
+        assertEquals(30.7 + 10, estimate.digestion, 1e-9)
+        assertEquals(0.0, estimate.fallbackDigestion, 0.0)
+        assertTrue(estimate.nutritionIncomplete)
+        assertEquals(1730.0, r.nutrientTotals(time(day, 0), now, now).values[0], 0.0)
+        foods.getJSONObject(2).getJSONObject("food").put("protein", 10)
+        r.db.save("direct", record)
+        assertEquals(50.7, r.dailyExpenditure(day, now).digestion, 1e-9)
     }
 
     @Test

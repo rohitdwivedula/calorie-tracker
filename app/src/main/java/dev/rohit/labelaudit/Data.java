@@ -259,7 +259,7 @@ public final class Data extends SQLiteOpenHelper {
       if (j.getString("name").trim().isEmpty()) throw new Exception("Name required");
       number(j, "basis", 0.001, 100000);
       if (j.has("labelPercentages")) LabelDailyValues.validate(j.getJSONObject("labelPercentages"));
-      for (int n = 4; n < Nutrients.KEYS.length; n++)
+      for (int n = 1; n < Nutrients.KEYS.length; n++)
         if (j.has(Nutrients.KEYS[n])) number(j, Nutrients.KEYS[n], 0, 100000);
       if (j.has("servingGrams")) number(j, "servingGrams", 0.001, 100000);
       if (j.has("servingMl")) number(j, "servingMl", 0.001, 100000);
@@ -275,8 +275,6 @@ public final class Data extends SQLiteOpenHelper {
         for (int i = 1; i < Nutrients.KEYS.length; i++)
           if (j.has(Nutrients.KEYS[i]))
             throw new Exception("Calorie-only nutrition must leave other nutrients unknown");
-      } else {
-        for (String k : new String[] {"protein", "carbs", "fat"}) number(j, k, 0, 100000);
       }
     } else if (kind.equals("batch") || kind.equals("direct")) {
       if (!draft && j.getString("name").trim().isEmpty()) throw new Exception("Name required");

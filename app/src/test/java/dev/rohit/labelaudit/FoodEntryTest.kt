@@ -18,11 +18,10 @@ class FoodEntryTest {
             .put("fat", "2.5")
 
     @Test
-    fun blankRequiredMacroHasFieldErrorInsteadOfParsingEmptyStringOrAssumingZero() {
+    fun blankMacroStaysUnknown() {
         val result = FoodEntry.build(original(), input().put("carbs", ""))
-        assertNull(result.food)
-        assertTrue(result.errors.getValue("carbs").contains("0"))
-        assertEquals(setOf("carbs"), result.errors.keys)
+        assertTrue(result.errors.isEmpty())
+        assertFalse(result.food!!.has("carbs"))
     }
 
     @Test

@@ -40,11 +40,7 @@ fun ExpenditureBreakdown(
             "${kcal(e.resting)} kcal",
         )
         if (!e.legacy) {
-            InfoRow(
-                "Food digestion · est.",
-                if (e.nutritionIncomplete && e.digestion == 0.0) "—"
-                else "${if(e.nutritionIncomplete) "≥" else ""}${kcal(e.digestion)} kcal",
-            )
+            InfoRow("Food digestion · est.", "${kcal(e.digestion)} kcal")
             if (e.fallbackDigestion > 0)
                 Text(
                     "Includes ${kcal(e.fallbackDigestion)} kcal using 8% for calorie-only logs",
@@ -77,7 +73,7 @@ fun ExpenditureBreakdown(
                 )
             if (e.nutritionIncomplete)
                 Text(
-                    "Digestion incomplete · some food macros are unknown",
+                    "Digestion estimate uses available, consistent macros",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

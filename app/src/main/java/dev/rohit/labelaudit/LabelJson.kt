@@ -51,7 +51,7 @@ object LabelJson {
             vitamin-e: natural-alpha, synthetic-alpha;
             vitamin-b9: food-folate, folic-acid-with-food.
             Do not include any IDs, URLs, API credentials or other fields. I will review the form
-            before saving; missing calories or core macros must be filled in by me.
+            before saving; calories are required. Leave unlisted macros unknown.
         """
                 .trimIndent()
 

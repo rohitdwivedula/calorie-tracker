@@ -27,13 +27,13 @@ class LabelJsonTest {
         val json = example()
         json
             .getJSONObject("nutrients")
-            .put("carbs", JSONObject.NULL)
+            .put("carbs", JSONObject().put("amount", JSONObject.NULL).put("unit", "g"))
             .put("fat", JSONObject().put("amount", 0).put("unit", "g"))
         val fields = LabelJson.parse(json.toString())
         assertEquals("", fields.getString("carbs"))
         assertEquals("0", fields.getString("fat"))
         val result = FoodEntry.build(JSONObject().put("id", "synthetic-json"), fields)
-        assertTrue(result.errors.containsKey("carbs"))
+        assertFalse(result.food!!.has("carbs"))
     }
 
     @Test

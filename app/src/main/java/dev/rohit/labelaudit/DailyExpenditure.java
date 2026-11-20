@@ -5,6 +5,11 @@ package dev.rohit.labelaudit;
  * cache.
  */
 public final class DailyExpenditure {
+  // Allow label rounding; compare on the printed basis before scaling or combining foods.
+  public static boolean conflictingMacros(double kcal, double protein, double carbs, double fat) {
+    return protein * 4 + carbs * 4 + fat * 9 > kcal + Math.max(10, kcal * 0.20);
+  }
+
   public static final class Estimate {
     public final double resting, digestion, fallbackDigestion, extra, total;
     public final Double steps;

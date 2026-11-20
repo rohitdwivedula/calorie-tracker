@@ -100,9 +100,8 @@ use normalized mass values. Missing nutrients stay absent. Goals are stored with
 settings and included in backups. Old snapshots remain unchanged when saved food
 nutrition is updated; rescan to obtain optional values for future ingredients.
 
-Manual entry validates each field before saving. Calories and core macros require
-an explicit value (enter `0` when printed on the label); blank optional nutrients
-remain unknown. Under **Serving size, vitamins & minerals**, tap **% DV** beside a
+Manual entry validates each field before saving. Calories are required. Enter `0` for a printed
+zero and leave unlisted nutrients blank. Under **Serving size, vitamins & minerals**, tap **% DV** beside a
 vitamin/mineral to enter a US label percentage. Choose Current US or Older US;
 the original percentage and reference are retained in foods, snapshots and backups.
 These label references are separate from personal RDA/AI targets. Unresolved older
@@ -187,8 +186,10 @@ measurements. They live in `ExpenditureCoefficients.java`, together with the req
 none are configurable in Settings. A 1,100 kcal quick log adds 88 kcal of estimated
 digestion. The fallback applies only to that entry instead of macro-based TEF, never
 on top of it or to the whole day's calories. Its protein/carbs/fat remain unknown in
-nutrition summaries. Foods with saved macros retain the macro calculation even if
-label calories differ slightly from 4/4/9 arithmetic. Any unresolved missing macros
+nutrition summaries. Foods receive digestion credit for the macros supplied. If their
+combined 4/4/9 energy exceeds the printed calories by more than the greater of
+10 kcal or 20% on the same basis, the app flags that food and excludes its digestion
+credit. Any unresolved missing macros
 outside calorie-only entries still leave digestion incomplete. The breakdown labels
 the fallback explicitly. Changing, backdating or deleting a quick log recalculates
 only its day's fallback; food calories are never changed.

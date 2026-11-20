@@ -138,11 +138,6 @@ public final class TrackerRepository {
   }
 
   public Nutrients.Total nutrientTotals(long from, long to, long now) throws Exception {
-    return nutrientTotals(from, to, now, true);
-  }
-
-  private Nutrients.Total nutrientTotals(long from, long to, long now, boolean includeCalorieOnly)
-      throws Exception {
     Nutrients.Total result = new Nutrients.Total();
     for (String kind : new String[] {"batch", "direct"})
       for (JSONObject batch : db.list(kind)) {
@@ -156,16 +151,15 @@ public final class TrackerRepository {
               fraction * item.getDouble("quantity") / food.getDouble("basis"));
         }
       }
-    if (includeCalorieOnly)
-      for (JSONObject entry : db.list("calorie")) {
-        long t = entry.getLong("time");
-        if (t >= from && t < Math.min(to, now)) {
-          double[] n = new double[Nutrients.KEYS.length];
-          Arrays.fill(n, Double.NaN);
-          n[0] = entry.getDouble("kcal");
-          result.add(n, 1);
-        }
+    for (JSONObject entry : db.list("calorie")) {
+      long t = entry.getLong("time");
+      if (t >= from && t < Math.min(to, now)) {
+        double[] n = new double[Nutrients.KEYS.length];
+        Arrays.fill(n, Double.NaN);
+        n[0] = entry.getDouble("kcal");
+        result.add(n, 1);
       }
+    }
     return result;
   }
 
@@ -272,6 +266,7 @@ public final class TrackerRepository {
                 && cache.optLong("through", 0) < midnight(date.plusDays(1)));
     double accruedResting =
         restingRate(date) * (to - from) / (double) (midnight(date.plusDays(1)) - from);
+    Nutrients.Total digestionMacros = new Nutrients.Total();
     double calorieOnlyKcal = 0;
     for (JSONObject entry : db.list("calorie")) {
       long time = entry.getLong("time");
@@ -285,22 +280,23 @@ public final class TrackerRepository {
         JSONArray ingredients = batch.getJSONArray("ingredients");
         for (int i = 0; i < ingredients.length(); i++) {
           JSONObject item = ingredients.getJSONObject(i), food = item.getJSONObject("food");
-          if (food.optBoolean("calorieOnly"))
-            calorieOnlyKcal +=
-                fraction
-                    * item.getDouble("quantity")
-                    / food.getDouble("basis")
-                    * food.getDouble("kcal");
+          double factor = fraction * item.getDouble("quantity") / food.getDouble("basis");
+          double[] values = nutrientValues(food);
+          if (food.optBoolean("calorieOnly")) calorieOnlyKcal += factor * values[0];
+          if (DailyExpenditure.conflictingMacros(
+              values[0],
+              food.optDouble("protein", 0),
+              food.optDouble("carbs", 0),
+              food.optDouble("fat", 0))) {
+            // Withhold only this ingredient's digestion credit. Intake retains the snapshot.
+            Arrays.fill(values, 1, 4, Double.NaN);
+          }
+          digestionMacros.add(values, factor);
         }
       }
     // Each calorie-only record uses the fallback INSTEAD of macro TEF. The public intake
     // nutrient totals still mark its macros unknown; no fabricated grams are persisted.
     return DailyExpenditure.calculate(
-        accruedResting,
-        nutrientTotals(from, to, now, false),
-        steps,
-        extraActivity(date),
-        stale,
-        calorieOnlyKcal);
+        accruedResting, digestionMacros, steps, extraActivity(date), stale, calorieOnlyKcal);
   }
 }

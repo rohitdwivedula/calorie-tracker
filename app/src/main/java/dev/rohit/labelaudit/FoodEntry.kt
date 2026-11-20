@@ -2,6 +2,9 @@ package dev.rohit.labelaudit
 
 import org.json.JSONObject
 
+internal const val macroConflictMessage =
+    "Check the calories and macros. Their values disagree, so this food gets no digestion credit."
+
 data class FoodEntryResult(val food: JSONObject?, val errors: Map<String, String>)
 
 /** Validates user input before parsing; untouched API precision and unknowns are preserved. */
@@ -70,8 +73,8 @@ object FoodEntry {
             true,
             default = input.optString("basis", initial(original, "basis").ifBlank { "1" }),
         )
-        for (key in listOf("kcal", "protein", "carbs", "fat")) numeric(key, true, false)
-        for (i in 4 until Nutrients.KEYS.size) numeric(
+        numeric("kcal", true, false)
+        for (i in 1 until Nutrients.KEYS.size) numeric(
             Nutrients.KEYS[i],
             false,
             false,

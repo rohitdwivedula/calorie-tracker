@@ -219,6 +219,15 @@ private fun PortionContent(v: TrackerViewModel) {
                     )
             }
             Section("Nutrition for this amount") {
+                if (
+                    DailyExpenditure.conflictingMacros(
+                        f.getDouble("kcal"),
+                        f.optDouble("protein", 0.0),
+                        f.optDouble("carbs", 0.0),
+                        f.optDouble("fat", 0.0),
+                    )
+                )
+                    Text(macroConflictMessage, color = MaterialTheme.colorScheme.error)
                 for (i in 1..4) {
                     val key = Nutrients.KEYS[i]
                     InfoRow(

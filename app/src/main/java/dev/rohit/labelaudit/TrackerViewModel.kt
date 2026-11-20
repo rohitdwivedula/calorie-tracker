@@ -168,10 +168,11 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     val completeFood
         get() = foodComplete(foodJson)
 
-    private fun foodComplete(json: String): Boolean =
+    private fun foodComplete(json: String, requireMacros: Boolean = false): Boolean =
         try {
-            Data.validate("food", JSONObject(json))
-            true
+            val food = JSONObject(json)
+            Data.validate("food", food)
+            !requireMacros || listOf("protein", "carbs", "fat").all(food::has)
         } catch (_: Exception) {
             false
         }
@@ -611,8 +612,11 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
             when {
                 savedFood?.json?.let(::foodComplete) == true -> FoodSource.SAVED
                 off?.phase == LookupPhase.LOADING -> null
-                off?.json?.let(::foodComplete) == true -> FoodSource.OFF
+                off?.json?.let { foodComplete(it, requireMacros = true) } == true -> FoodSource.OFF
                 fs?.phase == LookupPhase.LOADING -> null
+                fs?.json?.let { foodComplete(it, requireMacros = true) } == true ->
+                    FoodSource.FATSECRET
+                off?.json?.let(::foodComplete) == true -> FoodSource.OFF
                 fs?.json?.let(::foodComplete) == true -> FoodSource.FATSECRET
                 off?.phase == LookupPhase.READY -> FoodSource.OFF
                 fs?.phase == LookupPhase.READY -> FoodSource.FATSECRET

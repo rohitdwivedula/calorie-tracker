@@ -346,7 +346,7 @@ fun FoodEditor(v: TrackerViewModel) {
             }
             entryField("name", "Food name", numeric = false)
             Text(
-                "Enter label values. Use 0 when the label says 0.",
+                "Enter calories. Leave unlisted nutrients blank.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -379,6 +379,18 @@ fun FoodEditor(v: TrackerViewModel) {
                     "fiber" to "Fiber (g, optional)",
                 )
                 .forEach { (key, label) -> entryField(key, label) }
+            fun amount(key: String) = v.field(scope, key, initial(key)).toDoubleOrNull()
+            if (
+                amount("kcal")?.let { energy ->
+                    DailyExpenditure.conflictingMacros(
+                        energy,
+                        amount("protein") ?: 0.0,
+                        amount("carbs") ?: 0.0,
+                        amount("fat") ?: 0.0,
+                    )
+                } == true
+            )
+                Text(macroConflictMessage, color = MaterialTheme.colorScheme.error)
             TextButton(onClick = { extras = !extras }) {
                 Icon(Icons.Default.Tune, null)
                 Spacer(Modifier.width(8.dp))

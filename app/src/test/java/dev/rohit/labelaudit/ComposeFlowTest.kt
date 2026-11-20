@@ -349,7 +349,7 @@ class ComposeFlowTest {
     }
 
     @Test
-    fun manualIngredientShowsMissingCarbsInlineAndAcceptsExplicitZero() {
+    fun manualIngredientAcceptsUnlistedCarbs() {
         ui.onNodeWithText("New dish").performClick()
         ui.onNodeWithText("Dish name").performTextInput("Manual entry dish")
         ui.runOnIdle {
@@ -362,11 +362,6 @@ class ComposeFlowTest {
         ui.onNodeWithText("Protein (g)").performTextInput("9")
         ui.onNodeWithText("Fat (g)").performScrollTo().performTextInput("2.5")
         ui.onNodeWithText("Continue").performClick()
-        ui.onNodeWithText("Required · enter 0 if the label says 0").assertIsDisplayed()
-        ui.onNodeWithText("Couldn't complete that").assertDoesNotExist()
-        screenshot("manual-required-field")
-        ui.onNodeWithText("Carbs (g)").performTextInput("0")
-        ui.onNodeWithText("Continue").performClick()
         ui.onNodeWithContentDescription("Edit barcode").assertDoesNotExist()
         ui.onNodeWithText("Quantity").performTextReplacement("2")
         ui.onNodeWithText("Add to dish").performClick()
@@ -375,7 +370,7 @@ class ComposeFlowTest {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
             org.junit.Assert.assertEquals(198.0, v.repo.nutrition(v.draft)[0], 0.0)
             val food = v.draft.getJSONArray("ingredients").getJSONObject(0).getJSONObject("food")
-            org.junit.Assert.assertEquals(0.0, food.getDouble("carbs"), 0.0)
+            org.junit.Assert.assertFalse(food.has("carbs"))
             org.junit.Assert.assertFalse(food.has("fiber"))
         }
     }

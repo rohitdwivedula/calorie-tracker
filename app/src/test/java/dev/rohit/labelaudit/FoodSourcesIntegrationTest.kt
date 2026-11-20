@@ -191,7 +191,7 @@ class FoodSourcesIntegrationTest {
             )
         v.lookup("000000000002")
         await { !v.lookingUpFood }
-        assertFalse(v.completeFood)
+        assertTrue(v.completeFood)
         assertFalse(v.food.has("protein"))
     }
 
