@@ -12,8 +12,17 @@ public class NutrientsTest {
     d.add(1.5, true, false, 2, true);
     d.add(3, true, false, 2, true);
     d.add(0, false, true, 2, true);
-    assertEquals(1, d.met);
+    assertEquals(2, d.met);
     assertEquals(1, d.unknown);
+  }
+
+  @Test
+  public void loggedDaysUseRecordedAmountsForMinimumsAndLimits() {
+    assertTrue(Nutrients.targetMet(80, 80, false));
+    assertFalse(Nutrients.targetMet(0, 80, false));
+    assertFalse(Nutrients.targetMet(3, 2, true));
+    assertTrue(Nutrients.targetMet(0, 2, true));
+    assertFalse(Nutrients.targetMet(0, 0, true));
   }
 
   double[] food() {

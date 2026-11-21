@@ -12,6 +12,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.time.*
 import java.time.format.DateTimeFormatter
 
@@ -59,6 +61,31 @@ internal enum class StatsPeriod(val label: String, val step: Period) {
     }
 }
 
+/** Bucket long ranges for the chart while preserving the exact selected endpoints. */
+internal fun customBars(start: LocalDate, days: Long): List<BalanceBar> {
+    require(days > 0)
+    val end = start.plusDays(days)
+    val label = DateTimeFormatter.ofPattern(when {
+        days <= 180 -> "M/d"
+        days <= 1096 -> "MMM yy"
+        else -> "yyyy"
+    })
+    val step = when {
+        days <= 31 -> Period.ofDays(1)
+        days <= 180 -> Period.ofWeeks(1)
+        days <= 1096 -> Period.ofMonths(1)
+        else -> Period.ofYears(1)
+    }
+    return buildList {
+        var from = start
+        while (from < end) {
+            val until = minOf(from.plus(step), end)
+            add(BalanceBar(from, until, from.format(label)))
+            from = until
+        }
+    }
+}
+
 @Composable
 internal fun PeriodPage(
     today: LocalDate,
@@ -67,9 +94,12 @@ internal fun PeriodPage(
 ) {
     var mode by rememberSaveable { mutableStateOf(StatsPeriod.Week) }
     var anchorText by rememberSaveable { mutableStateOf(today.toString()) }
-    var pickDate by remember { mutableStateOf(false) }
+    var customDays by rememberSaveable { mutableLongStateOf(0L) }
+    var pickDate by rememberSaveable { mutableStateOf(false) }
     val anchor = LocalDate.parse(anchorText)
-    val bars = remember(mode, anchor, weekStart) { mode.bars(anchor, weekStart) }
+    val bars = remember(mode, anchor, weekStart, customDays) {
+        if (customDays > 0) customBars(anchor, customDays) else mode.bars(anchor, weekStart)
+    }
     val start = bars.first().start
     val end = bars.last().end
     Column {
@@ -80,8 +110,11 @@ internal fun PeriodPage(
                 ) {
                     StatsPeriod.entries.forEachIndexed { i, option ->
                         SegmentedButton(
-                            selected = mode == option,
-                            onClick = { mode = option },
+                            selected = customDays == 0L && mode == option,
+                            onClick = {
+                                mode = option
+                                customDays = 0
+                            },
                             icon = {},
                             shape = SegmentedButtonDefaults.itemShape(i, StatsPeriod.entries.size),
                         ) {
@@ -99,21 +132,31 @@ internal fun PeriodPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(onClick = { anchorText = anchor.minus(mode.step).toString() }) {
+                IconButton(onClick = {
+                    val previous = if (customDays > 0) anchor.minusDays(customDays) else anchor.minus(mode.step)
+                    anchorText = previous.toString()
+                }) {
                     Icon(Icons.Default.ChevronLeft, "Previous period")
                 }
-                TextButton(onClick = { pickDate = true }) {
+                TextButton(onClick = { pickDate = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.DateRange, "Select date range", Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        if (mode == StatsPeriod.Year) anchor.year.toString()
-                        else if (mode == StatsPeriod.Day)
+                        if (customDays == 0L && mode == StatsPeriod.Year) anchor.year.toString()
+                        else if (end == start.plusDays(1))
                             anchor.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
                         else
-                            "${start.format(DateTimeFormatter.ofPattern("MMM d"))} – ${end.minusDays(1).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
+                            "${start.format(DateTimeFormatter.ofPattern(if (start.year == end.minusDays(1).year) "MMM d" else "MMM d, yyyy"))} – ${end.minusDays(1).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
                     )
                 }
                 IconButton(
                     enabled = end <= today,
-                    onClick = { anchorText = minOf(today, anchor.plus(mode.step)).toString() },
+                    onClick = {
+                        val next = if (customDays > 0)
+                            minOf(end, today.minusDays(customDays - 1))
+                        else minOf(today, anchor.plus(mode.step))
+                        anchorText = next.toString()
+                    },
                 ) {
                     Icon(Icons.Default.ChevronRight, "Next period")
                 }
@@ -122,32 +165,39 @@ internal fun PeriodPage(
         content(bars)
     }
     if (pickDate) {
-        val state =
-            rememberDatePickerState(
-                initialSelectedDateMillis =
-                    anchor.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-            )
-        DatePickerDialog(
-            onDismissRequest = { pickDate = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        state.selectedDateMillis?.let {
-                            anchorText =
-                                Instant.ofEpochMilli(it)
-                                    .atZone(ZoneOffset.UTC)
-                                    .toLocalDate()
-                                    .toString()
-                        }
-                        pickDate = false
-                    }
-                ) {
-                    Text("Show period")
+        val state = rememberDateRangePickerState(
+            initialSelectedStartDateMillis = start.toEpochDay() * 86_400_000L,
+            initialSelectedEndDateMillis = minOf(today, end.minusDays(1)).toEpochDay() * 86_400_000L,
+            selectableDates = remember(today) {
+                object : SelectableDates {
+                    override fun isSelectableDate(utcTimeMillis: Long) =
+                        utcTimeMillis <= today.toEpochDay() * 86_400_000L
                 }
             },
-            dismissButton = { TextButton(onClick = { pickDate = false }) { Text("Cancel") } },
+            initialDisplayedMonthMillis = start.toEpochDay() * 86_400_000L,
+        )
+        Dialog(
+            onDismissRequest = { pickDate = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            DatePicker(state)
+            Surface(Modifier.fillMaxSize()) {
+                Column(Modifier.systemBarsPadding().imePadding()) {
+                    DateRangePicker(state, Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { pickDate = false }) { Text("Cancel") }
+                        Button(
+                            enabled = state.selectedStartDateMillis != null && state.selectedEndDateMillis != null,
+                            onClick = {
+                                val first = Instant.ofEpochMilli(state.selectedStartDateMillis!!).atZone(ZoneOffset.UTC).toLocalDate()
+                                val last = Instant.ofEpochMilli(state.selectedEndDateMillis!!).atZone(ZoneOffset.UTC).toLocalDate()
+                                anchorText = first.toString()
+                                customDays = last.toEpochDay() - first.toEpochDay() + 1
+                                pickDate = false
+                            },
+                        ) { Text("Apply range") }
+                    }
+                }
+            }
         }
     }
 }

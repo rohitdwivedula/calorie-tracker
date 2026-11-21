@@ -139,6 +139,22 @@ public final class TrackerRepository {
 
   public Nutrients.Total nutrientTotals(long from, long to, long now) throws Exception {
     Nutrients.Total result = new Nutrients.Total();
+    forEachConsumedFood(from, to, now, (name, values, fraction) -> result.add(values, fraction));
+    return result;
+  }
+
+  public Map<String, Nutrients.Total> foodContributions(long from, long to, long now) throws Exception {
+    Map<String, Nutrients.Total> foods = new LinkedHashMap<>();
+    forEachConsumedFood(from, to, now, (name, values, fraction) ->
+        foods.computeIfAbsent(name, ignored -> new Nutrients.Total()).add(values, fraction));
+    return foods;
+  }
+
+  private interface FoodConsumer {
+    void add(String name, double[] values, double fraction);
+  }
+
+  private void forEachConsumedFood(long from, long to, long now, FoodConsumer consumer) throws Exception {
     for (String kind : new String[] {"batch", "direct"})
       for (JSONObject batch : db.list(kind)) {
         double fraction = batchFraction(batch, from, to, now);
@@ -146,7 +162,7 @@ public final class TrackerRepository {
         JSONArray ingredients = batch.getJSONArray("ingredients");
         for (int i = 0; i < ingredients.length(); i++) {
           JSONObject item = ingredients.getJSONObject(i), food = item.getJSONObject("food");
-          result.add(
+          consumer.add(food.optString("name", "Food"),
               nutrientValues(food),
               fraction * item.getDouble("quantity") / food.getDouble("basis"));
         }
@@ -157,10 +173,10 @@ public final class TrackerRepository {
         double[] n = new double[Nutrients.KEYS.length];
         Arrays.fill(n, Double.NaN);
         n[0] = entry.getDouble("kcal");
-        result.add(n, 1);
+        String name = entry.optString("name").trim();
+        consumer.add(name.isEmpty() ? "Quick calories" : name, n, 1);
       }
     }
-    return result;
   }
 
   public String nutrientText(Nutrients.Total total, int i) {

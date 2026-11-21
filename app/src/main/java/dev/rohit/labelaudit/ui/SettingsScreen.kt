@@ -39,6 +39,7 @@ fun SettingsScreen(v: TrackerViewModel, export: () -> Unit, restore: () -> Unit)
             TextButton(onClick = v::openNutrientProfile) {
                 Text(if (profile == null) "Set reference profile" else "Edit reference profile")
             }
+            TextButton(onClick = { v.go("nutrient-targets") }) { Text("Daily nutrient targets") }
         }
         Section("Energy assumptions") {
             FormField(

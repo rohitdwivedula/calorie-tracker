@@ -28,7 +28,7 @@ internal fun EnergyStats(v: TrackerViewModel, history: LoggedHistory, bars: List
     var deficit by rememberSaveable { mutableStateOf(true) }
     Page {
         var selected by
-            key(bars.first().start.toString(), bars.size) {
+            key(bars.first().start.toString(), bars.last().end.toString(), bars.size) {
                 rememberSaveable { mutableIntStateOf(-1) }
             }
         val start = bars.first().start
@@ -43,7 +43,7 @@ internal fun EnergyStats(v: TrackerViewModel, history: LoggedHistory, bars: List
         val pattern = DateTimeFormatter.ofPattern("MMM d, yyyy")
         val rangeText = "${from.format(pattern)} – ${until.minusDays(1).format(pattern)}"
         val singleDay = daysCount == 1L
-        val currentWeek = daysCount == 7L && history.today >= from && history.today < until
+        val currentWeek = daysCount == 7L && from == LoggedHistory.weekStart(history.today, r.settings.getInt("week"))
         Section(
             when {
                 currentWeek -> "This week so far"

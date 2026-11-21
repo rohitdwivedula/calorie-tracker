@@ -111,6 +111,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "food-edit" -> "Food nutrition"
             "settings" -> "Settings"
             "fatsecret-settings" -> "FatSecret"
+            "nutrient-targets" -> "Daily nutrient targets"
             "nutrient-profile" -> "Nutrient references"
             "weight-import" -> "Import past weigh-ins"
             "summary" -> "Energy balance"
@@ -200,6 +201,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                     "fatsecret-settings" -> FatSecretSettingsScreen(v)
                     "history" -> HistoryScreen(v)
                     "stats" -> StatsScreen(v) { connectHealth(WeightSync.PERMISSION) }
+                    "nutrient-targets" -> NutrientTargetsScreen(v)
                     "nutrient-profile" -> NutrientProfileScreen(v)
                     "settings" ->
                         SettingsScreen(

@@ -200,12 +200,10 @@ Automatic refresh uses incremental changes after the initial 30-day read. A Heal
 corrections and deletions. SQLite stores measurements and the token together. This
 device cache is separate from food backups. No older-history permission is requested.
 
-Scale change uses average weights from the first and last seven-day windows when
-each has three measured days and the endpoints span at least 14 days. Otherwise it
-uses the first and last daily means. For the rough calorie comparison, daily balances
-run from the first endpoint date up to (excluding) the last, using mean dates for
-smoothed endpoints. It requires a span of 21 days and food logs on at least 80% of
-those days. The separate period deficit follows Energy's existing logged-day policy.
+Scale change compares the first and last three measured days, weighting daily means equally.
+With fewer than six measured days it uses the largest equal, non-overlapping groups possible.
+The energy comparison sums logged balances between the groups’ mean dates (first inclusive,
+last exclusive) and shows logged-day coverage. One food log in that interval suffices.
 The approximate conversion is 7,700 kcal/kg. Individual weight responses vary.
 [Energy conversion and its limits](https://pmc.ncbi.nlm.nih.gov/articles/PMC2376744/)
 

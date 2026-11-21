@@ -116,6 +116,11 @@ public final class Nutrients {
     }
   }
 
+  /** Compare the recorded amount on a logged day, including partial nutrient totals. */
+  public static boolean targetMet(double value, double goal, boolean upperLimit) {
+    return goal > 0 && (upperLimit ? value <= goal : value >= goal);
+  }
+
   public static final class Days {
     public int complete = 0, unknown = 0, met = 0;
     private double sum = 0;
@@ -127,12 +132,12 @@ public final class Nutrients {
         sum += value;
         anyKnown = true;
       }
+      if (targetMet(value, goal, upperLimit)) met++;
       if (missing) {
         unknown++;
         return;
       }
       complete++;
-      if (goal > 0 && (upperLimit ? value <= goal : value >= goal)) met++;
     }
 
     public double average() {

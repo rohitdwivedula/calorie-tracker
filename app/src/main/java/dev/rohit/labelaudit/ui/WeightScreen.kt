@@ -2,12 +2,15 @@ package dev.rohit.labelaudit
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -35,7 +38,6 @@ internal fun WeightScreen(
 ) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { v.refreshWeight() }
     val r = v.repo
-    val dailyBars = bars.first().end == bars.first().start.plusDays(1)
     val short = DateTimeFormatter.ofPattern("MMM d")
     Page {
         val start = bars.first().start
@@ -47,80 +49,26 @@ internal fun WeightScreen(
         val daily =
             items.groupBy { it.date }.mapValues { (_, rows) -> rows.map { it.kg }.average() }
         val change = weightChange(daily)
-        var selected by
-            key(start.toString(), bars.size) { rememberSaveable { mutableIntStateOf(-1) } }
+        var selectedDate by rememberSaveable(start.toString(), end.toString()) {
+            mutableStateOf<String?>(null)
+        }
         val period = h.summary(start, end)
         Section("Weight trend") {
-            if (items.isNotEmpty()) {
-                val points =
-                    bars.map { bar ->
-                        if (dailyBars) items.filter { it.date == bar.start }.map { it.kg }
-                        else
-                            daily
-                                .filterKeys { it >= bar.start && it < bar.end }
-                                .values
-                                .takeIf { it.isNotEmpty() }
-                                ?.let { listOf(it.average()) }
-                                .orEmpty()
-                    }
-                val all = points.flatten()
-                val low = all.min()
-                val high = all.max()
-                val scroll = rememberScrollState()
-                val lastMeasured = points.indexOfLast { it.isNotEmpty() }
-                LaunchedEffect(lastMeasured, scroll.maxValue) {
-                    if (lastMeasured >= 0 && bars.size > 1)
-                        scroll.scrollTo(scroll.maxValue * lastMeasured / (bars.size - 1))
+            if (daily.isNotEmpty()) {
+                val selected = selectedDate?.let(LocalDate::parse)
+                WeightChart(start, end.minusDays(1), daily, selected) { date ->
+                    selectedDate = if (selected == date) null else date.toString()
                 }
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(scroll),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    bars.forEachIndexed { i, bar ->
-                        Column(
-                            Modifier.width(if (dailyBars) 36.dp else 44.dp)
-                                .clickable { selected = if (selected == i) -1 else i }
-                                .semantics {
-                                    contentDescription =
-                                        "${bar.start}: " +
-                                            (points[i]
-                                                .takeIf { it.isNotEmpty() }
-                                                ?.joinToString { pounds(it) } ?: "No weigh-ins")
-                                },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Box(Modifier.height(120.dp).fillMaxWidth()) {
-                                for (value in points[i]) {
-                                    val position =
-                                        if (high == low) .5 else (high - value) / (high - low)
-                                    Box(
-                                        Modifier.align(Alignment.TopCenter)
-                                            .offset(y = 110.dp * position.toFloat())
-                                            .size(9.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary)
-                                    )
-                                }
-                            }
-                            HorizontalDivider(
-                                color =
-                                    if (i == selected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.outlineVariant
-                            )
-                            Text(bar.label, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
+                val low = pounds(daily.values.min())
+                val high = pounds(daily.values.max())
                 Text(
-                    "${pounds(low)} – ${pounds(high)} · ${if(dailyBars) "weigh-ins" else "averages of measured days"}",
+                    if (low == high) "$low · daily average" else "$low – $high · daily averages",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (selected in bars.indices) {
-                    val bar = bars[selected]
-                    val readings = items.filter { it.date >= bar.start && it.date < bar.end }
+                if (selected != null && selected in daily) {
+                    val readings = items.filter { it.date == selected }
                     Text(
-                        if (readings.isEmpty()) "No weigh-ins in this period"
-                        else "${bar.start.format(short)} · readings",
+                        "${selected.format(short)} · ${pounds(daily.getValue(selected))} average",
                         style = MaterialTheme.typography.labelLarge,
                     )
                     for (w in readings) {
@@ -138,11 +86,11 @@ internal fun WeightScreen(
                 )
             if (change != null) {
                 InfoRow(
-                    if (change.smoothed) "Smoothed scale change" else "Scale change",
+                    if (change.daysPerEnd > 1) "Smoothed scale change" else "Scale change",
                     changeText(change.kg),
                 )
                 Text(
-                    if (change.smoothed) "First and last 7-day averages, using measured days."
+                    if (change.daysPerEnd > 1) "Average of the first ${change.daysPerEnd} and last ${change.daysPerEnd} measured days."
                     else "First and last measured days.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -171,7 +119,8 @@ internal fun WeightScreen(
                     )
                 } else
                     Text(
-                        "Comparison needs 3 weeks between trend endpoints and food logs on 80% of those days.",
+                        "${change.start.format(short)} to ${change.end.format(short)} · " +
+                            "No food logged between these weight endpoints.",
                         style = MaterialTheme.typography.bodySmall,
                     )
             }
@@ -203,6 +152,87 @@ internal fun WeightScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeightChart(
+    start: LocalDate,
+    last: LocalDate,
+    daily: Map<LocalDate, Double>,
+    selected: LocalDate?,
+    onSelect: (LocalDate) -> Unit,
+) {
+    val dates = remember(daily) { daily.keys.sorted() }
+    val span = last.toEpochDay() - start.toEpochDay()
+    fun fraction(date: LocalDate) =
+        if (span == 0L) .5f else (date.toEpochDay() - start.toEpochDay()).toFloat() / span
+
+    val fit = remember(daily) { fittedWeightEndpoints(daily) }
+    val low = minOf(daily.values.min(), fit?.first ?: Double.POSITIVE_INFINITY, fit?.second ?: Double.POSITIVE_INFINITY)
+    val high = maxOf(daily.values.max(), fit?.first ?: Double.NEGATIVE_INFINITY, fit?.second ?: Double.NEGATIVE_INFINITY)
+    val ink = MaterialTheme.colorScheme.primary
+    val grid = MaterialTheme.colorScheme.outlineVariant
+    Box(Modifier.fillMaxWidth().height(120.dp).padding(horizontal = 6.dp)) {
+        Canvas(Modifier.fillMaxSize()) {
+            val inset = 7.dp.toPx()
+            for (level in listOf(0f, .5f, 1f)) {
+                val y = inset + level * (size.height - 2 * inset)
+                drawLine(grid, Offset(0f, y), Offset(size.width, y))
+            }
+            fun position(date: LocalDate, kg: Double): Offset {
+                val level = if (high == low) .5f else ((high - kg) / (high - low)).toFloat()
+                return Offset(size.width * fraction(date), inset + level * (size.height - 2 * inset))
+            }
+            if (fit != null) {
+                drawLine(
+                    color = ink.copy(alpha = .75f),
+                    start = position(dates.first(), fit.first),
+                    end = position(dates.last(), fit.second),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(.2.dp.toPx(), 5.dp.toPx())),
+                )
+            }
+            for (date in dates) {
+                val center = position(date, daily.getValue(date))
+                if (date == selected) drawCircle(ink.copy(alpha = .3f), 7.dp.toPx(), center)
+                drawCircle(ink, 3.5.dp.toPx(), center)
+            }
+        }
+        // Split the touch area halfway between adjacent dots, including gaps in the log.
+        Row(Modifier.fillMaxSize()) {
+            var left = 0f
+            dates.forEachIndexed { i, date ->
+                val right = dates.getOrNull(i + 1)?.let { (fraction(date) + fraction(it)) / 2 } ?: 1f
+                Box(
+                    Modifier.weight(right - left).fillMaxHeight()
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            onSelect(date)
+                        }
+                        .semantics { contentDescription = "$date: ${pounds(daily.getValue(date))}" }
+                )
+                left = right
+            }
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val density = LocalDensity.current
+        val style = MaterialTheme.typography.labelSmall
+        val format = DateTimeFormatter.ofPattern(if (span >= 365) "MMM yy" else "MMM d")
+        val dateOffsets = when {
+            span == 0L -> listOf(0L)
+            span > 1 && maxWidth >= 216.dp * density.fontScale -> listOf(0L, span / 2, span)
+            else -> listOf(0L, span)
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = if (span == 0L) Arrangement.Center else Arrangement.SpaceBetween,
+        ) {
+            dateOffsets.forEach { offset ->
+                Text(start.plusDays(offset).format(format), style = style, maxLines = 1)
             }
         }
     }

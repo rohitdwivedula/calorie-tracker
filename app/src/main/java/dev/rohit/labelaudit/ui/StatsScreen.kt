@@ -56,7 +56,7 @@ private fun NutrientStats(
 ) {
     val singleDay = end == start.plusDays(1)
     var group by rememberSaveable { mutableIntStateOf(0) }
-    var goalIndex by rememberSaveable { mutableIntStateOf(-1) }
+    var detailIndex by rememberSaveable { mutableIntStateOf(-1) }
     val days =
         remember(history, start, end) {
             history.days.subMap(start, true, end, false).values.map { it.nutrition }
@@ -108,14 +108,13 @@ private fun NutrientStats(
                     Nutrients.KEYS[i] == "sodium",
                 )
             }
-            Card(onClick = { if (i > 0) goalIndex = i }, Modifier.fillMaxWidth()) {
+            Card(onClick = { detailIndex = i }, Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(Nutrients.NAMES[i], style = MaterialTheme.typography.titleMedium)
-                        if (i > 0)
-                            Icon(
-                                Icons.Default.Tune,
-                                "Adjust target",
+                        Icon(
+                                Icons.Default.ChevronRight,
+                                "View intake details",
                                 Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -179,54 +178,6 @@ private fun NutrientStats(
             )
         }
     }
-    if (goalIndex > 0) {
-        val i = goalIndex
-        var text by
-            remember(i) {
-                mutableStateOf(
-                    if (v.repo.goal(i) > 0) fmt(v.repo.goal(i) * Nutrients.displayFactor(i)) else ""
-                )
-            }
-        AlertDialog(
-            onDismissRequest = { goalIndex = -1 },
-            title = { Text("${Nutrients.NAMES[i]} target") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        text,
-                        { text = it },
-                        label = { Text("Daily ${v.repo.goalUnit(i)}") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    )
-                    TextButton(
-                        onClick = {
-                            v.run {
-                                v.saveGoal(i, null)
-                                goalIndex = -1
-                            }
-                        }
-                    ) {
-                        Text(
-                            if (v.repo.settings.has("nutrientProfile")) "Use profile reference"
-                            else "Clear custom target"
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        v.run {
-                            v.saveGoal(i, text.toDouble() / Nutrients.displayFactor(i))
-                            goalIndex = -1
-                        }
-                    }
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = { TextButton(onClick = { goalIndex = -1 }) { Text("Cancel") } },
-        )
-    }
+    if (detailIndex >= 0)
+        NutrientIntakeDialog(v.repo, history, start, end, detailIndex) { detailIndex = -1 }
 }

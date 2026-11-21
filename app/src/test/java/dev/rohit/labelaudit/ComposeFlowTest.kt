@@ -700,9 +700,10 @@ class ComposeFlowTest {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
             val today = java.time.LocalDate.now(v.repo.zone)
             val early = WeighIn("scale-start", v.repo.midnight(today.minusDays(4)), 80.0, "scale")
-            val late = WeighIn("scale-end", v.repo.midnight(today), 79.0, "scale")
+            val late = WeighIn("scale-end", v.repo.midnight(today), 78.0, "scale")
+            val second = WeighIn("scale-second", v.repo.midnight(today) + 1, 80.0, "scale")
             v.repo.db.applyWeightSync(
-                mapOf(early.id to early, late.id to late),
+                mapOf(early.id to early, late.id to late, second.id to second),
                 null,
                 System.currentTimeMillis(),
                 0,
@@ -717,7 +718,8 @@ class ComposeFlowTest {
         ui.onNodeWithText("Week").performClick()
         val date = java.time.LocalDate.now().toString()
         ui.onNodeWithContentDescription("$date: 174.2 lb").performScrollTo().performClick()
-        ui.onNodeWithText("174.2 lb").assertExists()
+        ui.onNodeWithText("172.0 lb").assertExists()
+        ui.onNodeWithText("176.4 lb").assertExists()
         ui.onNodeWithText("Year").performScrollTo().performClick()
         ui.onNodeWithText("Year").assertIsSelected()
     }
@@ -906,7 +908,7 @@ class ComposeFlowTest {
                     org.json
                         .JSONObject()
                         .put("id", "food-$id")
-                        .put("name", "Synthetic food")
+                        .put("name", if (vitamin == null) "Unlabeled food" else "Synthetic food")
                         .put("basis", 100)
                         .put("unit", "g")
                         .put("kcal", 100)
@@ -944,9 +946,18 @@ class ComposeFlowTest {
         ui.onNodeWithText("Vitamins").performClick()
         ui.onNodeWithText("≥25 mg").assertExists()
         ui.onAllNodesWithText("Not provided by logged foods").onFirst().assertExists()
+        ui.onNodeWithText("≥25 mg").performClick()
+        ui.onNodeWithText("Synthetic food").assertExists()
+        ui.onNodeWithText("Recorded intake").assertExists()
+        ui.onNodeWithText("Unlabeled food").assertDoesNotExist()
+        ui.onNodeWithText("Done").performClick()
         screenshot("stats-today-vitamins")
         ui.onNodeWithText("8 wk").performClick()
-        ui.onNodeWithText("≥62.5 mg / day").assertExists()
+        ui.onNodeWithText("≥62.5 mg / day").performClick()
+        ui.onNodeWithText("Date").assertExists()
+        ui.onNodeWithText("100 mg").performScrollTo().performClick()
+        ui.onNodeWithText("Synthetic food").assertExists()
+        ui.onNodeWithText("Done").performClick()
         ui.onNodeWithText("Day").performClick()
         ui.onNodeWithText("≥25 mg").assertExists()
     }
@@ -962,6 +973,11 @@ class ComposeFlowTest {
             v.saveGoal(1, 125.0)
             v.openSettings()
         }
+        ui.onNodeWithText("Daily nutrient targets").performScrollTo().performClick()
+        ui.onNodeWithText("Protein").performClick()
+        ui.onNodeWithText("Protein target").assertExists()
+        ui.onNodeWithText("Cancel").performClick()
+        ui.runOnIdle { androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java].back() }
         ui.onNodeWithText("Set reference profile").performScrollTo().performClick()
         ui.onNodeWithText("Birth month/year (MM/YYYY)").performTextInput(birth)
         ui.onNodeWithText("Current reference age: 30").assertIsDisplayed()
