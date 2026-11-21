@@ -102,9 +102,9 @@ class LoggedHistoryTest {
     }
 
     @Test
-    fun dailyMacroAveragesUseOnlyCompleteDaysForEachNutrient() {
+    fun dailyMacroAveragesIncludeKnownNutrientsAcrossAllLoggedDays() {
         val yesterday = today.minusDays(1)
-        val plate = BatchOperations.record(batch(), 0.5, at(yesterday, 8), "first")
+        val plate = BatchOperations.record(batch(), 0.25, at(yesterday, 8), "first")
         r.db.save("batch", BatchOperations.finish(plate, at(today, 8)))
         val snack = food().put("protein", 0).apply { remove("fiber") }
         val time = at(today, 9)

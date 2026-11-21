@@ -183,3 +183,11 @@ fun MacroSummary(
         }
     }
 }
+
+internal fun Nutrients.Days.averageText(index: Int, perDay: Boolean = false): String {
+    val value = average()
+    if (value.isNaN()) return "—"
+    val prefix = if (unknown > 0) "≥" else ""
+    val suffix = if (perDay) " / day" else ""
+    return "$prefix${fmt(value * Nutrients.displayFactor(index))} ${Nutrients.unit(index)}$suffix"
+}

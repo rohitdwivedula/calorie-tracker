@@ -439,7 +439,10 @@ class ComposeFlowTest {
         ui.onNodeWithText("JSON").performClick()
         ui.onNodeWithText("Import label JSON").assertExists()
         ui.runOnIdle {
-            org.junit.Assert.assertEquals("existing JSON", clip.primaryClip!!.getItemAt(0).text.toString())
+            org.junit.Assert.assertEquals(
+                "existing JSON",
+                clip.primaryClip!!.getItemAt(0).text.toString(),
+            )
         }
         ui.onNodeWithText("Copy prompt").performClick()
         ui.runOnIdle {
@@ -663,6 +666,33 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun weightTabShowsCachedScaleChangeAndReadings() {
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            val today = java.time.LocalDate.now(v.repo.zone)
+            val early = WeighIn("scale-start", v.repo.midnight(today.minusDays(4)), 80.0, "scale")
+            val late = WeighIn("scale-end", v.repo.midnight(today), 79.0, "scale")
+            v.repo.db.applyWeightSync(
+                mapOf(early.id to early, late.id to late),
+                null,
+                System.currentTimeMillis(),
+                0,
+                "synthetic",
+            )
+        }
+        ui.onNodeWithText("Stats").performClick()
+        ui.onNodeWithText("Weight").performClick()
+        ui.onNodeWithText("Weeks").assertIsSelected()
+        ui.onNodeWithText("↓ 2.2 lb").assertExists()
+        ui.onNodeWithText("Days").performClick()
+        val date = java.time.LocalDate.now().toString()
+        ui.onNodeWithContentDescription("$date: 174.2 lb").performScrollTo().performClick()
+        ui.onNodeWithText("174.2 lb").assertExists()
+        ui.onNodeWithText("Months").performScrollTo().performClick()
+        ui.onNodeWithText("Months").assertIsSelected()
+    }
+
+    @Test
     fun settingsAndStatsNavigateBackWithoutExiting() {
         ui.onNodeWithContentDescription("Settings").performClick()
         ui.onNodeWithText("Energy assumptions").assertIsDisplayed()
@@ -869,7 +899,7 @@ class ComposeFlowTest {
         ui.onAllNodesWithText("Not provided by logged foods").onFirst().assertExists()
         screenshot("stats-today-vitamins")
         ui.onNodeWithText("7 days").performClick()
-        ui.onNodeWithText("100 mg / day").assertExists()
+        ui.onNodeWithText("≥62.5 mg / day").assertExists()
         ui.onNodeWithContentDescription("Show today's nutrients").performClick()
         ui.onNodeWithText("≥25 mg").assertExists()
     }

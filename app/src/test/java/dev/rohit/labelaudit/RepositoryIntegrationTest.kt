@@ -47,6 +47,21 @@ class RepositoryIntegrationTest {
             )
 
     @Test
+    fun syncedWeightUpdatesReplaceAndDeleteById() {
+        Data(context).use { db ->
+            val a = WeighIn("scale-a", 10, 70.0, "scale")
+            val b = WeighIn("scale-b", 11, 72.0, "scale")
+            db.applyWeightSync(mapOf(a.id to a, b.id to b), 0, 20, 0, "first")
+            val corrected = a.copy(kg = 71.0, time = 13)
+            db.applyWeightSync(mapOf(a.id to corrected, b.id to null), null, 25, 0, "second")
+            assertEquals(listOf(corrected), db.weighIns(0, 30))
+            db.applyWeightSync(emptyMap(), 0, 30, 0, "recovered")
+            assertTrue(db.weighIns(0, 30).isEmpty())
+            assertEquals(30L, db.lastWeightSync())
+        }
+    }
+
+    @Test
     fun versionTwoDatabaseMigratesWithoutChangingFacts() {
         val path = context.getDatabasePath("nutrition.db")
         path.parentFile!!.mkdirs()
@@ -62,7 +77,7 @@ class RepositoryIntegrationTest {
             db.version = 2
         }
         Data(context).use { db ->
-            assertEquals(4, db.readableDatabase.version)
+            assertEquals(5, db.readableDatabase.version)
             assertEquals("Test food", db.list("food").single().getString("name"))
             assertEquals(0, db.lookupArchive().length())
         }

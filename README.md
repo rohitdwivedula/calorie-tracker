@@ -23,8 +23,7 @@ until confirmed.
 Screens and shared components are split under `ui/`. `TrackerRepository` contains
 the existing Java accounting/persistence queries, `FoodLookup` handles explicit
 archived API lookup, and `BatchOperations` edits recorded facts without UI code.
-Database schema 4, backup schemas 1–5, package identity and nutrition snapshots are
-preserved. Returning to the app refreshes the as-of calculations.
+Database schema 5 adds a local weight cache. Backup schemas 1–5 remain supported. Returning to the app refreshes the as-of calculations.
 
 Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
 Release publication always requires user approval. Personal backups and nutrition
@@ -60,7 +59,7 @@ The **Nutrients** tab defaults to **Today**, showing the calories, macros, vitam
 recorded so far rather than an average. Partial known totals show ≥; entirely missing
 nutrients show —. **7 days** and **30 days** retain per-nutrient averages and reference
 coverage over logged days, including today so far. Zero-calorie foods count as logged
-days; saved foods/cooking do not. Missing-nutrient days are excluded per nutrient.
+days; saved foods/cooking do not. Averages divide known nutrient amounts by all logged days. Partial averages show ≥ and entirely unknown values show —.
 
 Choose **Settings → Nutrient references** once
 for automatic US adult (19+) age/sex-specific RDA/AI targets. Enter birth month/year
@@ -194,7 +193,23 @@ outside calorie-only entries still leave digestion incomplete. The breakdown lab
 the fallback explicitly. Changing, backdating or deleting a quick log recalculates
 only its day's fallback; food calories are never changed.
 
-Steps use AndroidX Health Connect 1.1.0. Only READ_STEPS is requested, in the foreground;
+**Stats → Weight** opens in Weeks. Days shows individual weigh-ins. Weeks and Months
+give each measured day equal weight. Tap a chart point to inspect its readings.
+The Weight tab requests READ_WEIGHT separately and syncs on entry, resume, or refresh.
+Initial sync reads the last 30 days. A Health Connect change token tracks new readings,
+corrections and deletions. SQLite stores measurements and the token together. This
+device cache is separate from food backups. No older-history permission is requested.
+
+Scale change uses average weights from the first and last seven-day windows when
+each has three measured days and the endpoints span at least 14 days. Otherwise it
+uses the first and last daily means. For the rough calorie comparison, daily balances
+run from the first endpoint date up to (excluding) the last, using mean dates for
+smoothed endpoints. It requires a span of 21 days and food logs on at least 80% of
+those days. The separate period deficit follows Energy's existing logged-day policy.
+The approximate conversion is 7,700 kcal/kg. Individual weight responses vary.
+[Energy conversion and its limits](https://pmc.ncbi.nlm.nih.gov/articles/PMC2376744/)
+
+Steps use AndroidX Health Connect 1.1.0 with foreground READ_STEPS access;
 no writes, raw-record sums, custom counter, active-energy import or background permission.
 `aggregate(AggregateRequest(metrics = setOf(StepsRecord.COUNT_TOTAL), ...))` queries all
 origins together, relying on Health Connect's priority-based deduplication as described
@@ -235,7 +250,7 @@ deficit goal appears alongside weekly balances.
 - Home shows three tiles: today’s estimated intake, today’s estimated deficit/surplus,
   and estimated weekly deficit/surplus from Sunday through now.
 - Tap a home balance tile, the chart icon, or Energy balance in Stats for period
-  charts, logged-day averages, food-log drill-down and cumulative balance. Charts
+  charts, logged-day averages, food-log drill-down and selected-period balance. Charts
   default to Sunday weeks and honor the configurable week-start setting; the home
   weekly tile always starts Sunday.
 - Set your own expenditure in **Settings (gear icon)**. Initial assumption is explicitly

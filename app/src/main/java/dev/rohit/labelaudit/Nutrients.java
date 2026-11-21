@@ -120,22 +120,23 @@ public final class Nutrients {
     public int complete = 0, unknown = 0, met = 0;
     private double sum = 0;
 
-    public void add(double value, boolean missing, double goal) {
-      add(value, missing, goal, false);
-    }
+    private boolean anyKnown;
 
-    public void add(double value, boolean missing, double goal, boolean upperLimit) {
+    public void add(double value, boolean known, boolean missing, double goal, boolean upperLimit) {
+      if (known) {
+        sum += value;
+        anyKnown = true;
+      }
       if (missing) {
         unknown++;
         return;
       }
       complete++;
-      sum += value;
       if (goal > 0 && (upperLimit ? value <= goal : value >= goal)) met++;
     }
 
     public double average() {
-      return complete == 0 ? Double.NaN : sum / complete;
+      return anyKnown ? sum / (complete + unknown) : Double.NaN;
     }
   }
 }

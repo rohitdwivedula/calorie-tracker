@@ -9,9 +9,9 @@ public class NutrientsTest {
   @Test
   public void sodiumLimitIsNotAMinimum() {
     Nutrients.Days d = new Nutrients.Days();
-    d.add(1.5, false, 2, true);
-    d.add(3, false, 2, true);
-    d.add(0, true, 2, true);
+    d.add(1.5, true, false, 2, true);
+    d.add(3, true, false, 2, true);
+    d.add(0, false, true, 2, true);
     assertEquals(1, d.met);
     assertEquals(1, d.unknown);
   }
@@ -69,20 +69,22 @@ public class NutrientsTest {
   }
 
   @Test
-  public void averagesExcludeUnknownDays() {
+  public void averagesIncludeUnknownAndPartialDays() {
     Nutrients.Days d = new Nutrients.Days();
-    d.add(100, false, 80);
-    d.add(0, true, 80);
-    d.add(50, false, 80);
-    assertEquals(75, d.average(), 0);
+    d.add(100, true, false, 80, false);
+    d.add(0, false, true, 80, false);
+    d.add(50, true, true, 80, false);
+    assertEquals(50, d.average(), 0);
     assertEquals(1, d.met);
-    assertEquals(1, d.unknown);
+    assertEquals(2, d.unknown);
   }
 
   @Test
-  public void noCompleteDaysHasNoAverage() {
+  public void noKnownDaysHasNoAverage() {
     Nutrients.Days d = new Nutrients.Days();
-    d.add(0, true, 10);
+    d.add(0, false, true, 10, false);
     assertTrue(Double.isNaN(d.average()));
+    d.add(0, true, true, 10, false);
+    assertEquals(0, d.average(), 0);
   }
 }

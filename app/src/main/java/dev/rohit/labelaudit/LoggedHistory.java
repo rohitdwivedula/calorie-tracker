@@ -108,7 +108,7 @@ public final class LoggedHistory {
   public Nutrients.Days nutrientDays(LocalDate from, LocalDate until, int nutrient) {
     Nutrients.Days tally = new Nutrients.Days();
     for (Day day : days.subMap(from, true, until, false).values()) {
-      tally.add(day.nutrition.values[nutrient], day.nutrition.missing[nutrient], 0);
+      tally.add(day.nutrition.values[nutrient], day.nutrition.known[nutrient], day.nutrition.missing[nutrient], 0, false);
     }
     return tally;
   }

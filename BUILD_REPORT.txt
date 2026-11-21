@@ -1,12 +1,12 @@
-Calorie Tracker v0.1.21 — Android app 1.0.21 (version code 23)
+Calorie Tracker v0.1.22 — Android app 1.0.22 (version code 24)
 
-Energy is the default Stats view, with per-day averages and weekly goal context.
-JSON import preserves the clipboard and rejects empty transcriptions.
+Stats includes Health Connect weight trends and range-matched balance comparisons.
+Nutrient averages use all logged days and distinguish partial data from known zero.
 
-Release build and release lint passed. All 195 tests passed.
+Release build and release lint passed. All 199 tests passed.
 Verified APK signature, update certificate, and 16 KB ZIP alignment.
 Checked outgoing files and APK for local credentials and signing keys.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6234517
-SHA256: 3efde104d1c931eef31a827a9e1c618cc75a247065c5cd07eca46fe048c1f0ed
+Bytes: 6246901
+SHA256: 0bc71dccd4a4bce47a937750e7713a522181037d092e4cf78b955653942380fd

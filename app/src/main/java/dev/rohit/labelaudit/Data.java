@@ -9,7 +9,7 @@ import org.json.*;
 /** Versioned recorded facts and separate raw provider responses; estimates are never persisted. */
 public final class Data extends SQLiteOpenHelper {
   public Data(Context c) {
-    super(c, "nutrition.db", null, 4);
+    super(c, "nutrition.db", null, 5);
   }
 
   public void onCreate(SQLiteDatabase d) {
@@ -17,12 +17,18 @@ public final class Data extends SQLiteOpenHelper {
     d.execSQL("CREATE INDEX records_kind ON records(kind)");
     createLookups(d);
     createSteps(d);
+    createWeights(d);
   }
 
   private static void createLookups(SQLiteDatabase d) {
     d.execSQL(
         "CREATE TABLE lookups(id TEXT PRIMARY KEY, barcode TEXT NOT NULL, retrieved_at INTEGER NOT"
             + " NULL, url TEXT NOT NULL, payload TEXT NOT NULL, sha256 TEXT NOT NULL)");
+  }
+
+  private static void createWeights(SQLiteDatabase d) {
+    d.execSQL("CREATE TABLE weight_cache(id TEXT PRIMARY KEY, time INTEGER NOT NULL, kg REAL NOT NULL, origin TEXT NOT NULL)");
+    d.execSQL("CREATE TABLE weight_sync(singleton INTEGER PRIMARY KEY, token TEXT NOT NULL, since INTEGER NOT NULL, synced INTEGER NOT NULL)");
   }
 
   private static void createSteps(SQLiteDatabase d) {
@@ -91,10 +97,11 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   public void onUpgrade(SQLiteDatabase d, int a, int b) {
-    if (a < 1 || b != 4) throw new IllegalStateException("Unsupported migration " + a + " to " + b);
+    if (a < 1 || b != 5) throw new IllegalStateException("Unsupported migration " + a + " to " + b);
     if (a < 2) d.execSQL("CREATE INDEX IF NOT EXISTS records_kind ON records(kind)");
     if (a < 3) createLookups(d);
     if (a < 4) createSteps(d);
+    if (a < 5) createWeights(d);
   }
 
   public static final int MAX_LOOKUP_BYTES = 1024 * 1024, MAX_BACKUP_BYTES = 64 * 1024 * 1024;

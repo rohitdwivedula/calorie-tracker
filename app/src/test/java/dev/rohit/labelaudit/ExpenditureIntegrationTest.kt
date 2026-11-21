@@ -388,7 +388,7 @@ class ExpenditureIntegrationTest {
                 db.version = 3
             }
         r = TrackerRepository(context)
-        assertEquals(4, r.db.readableDatabase.version)
+        assertEquals(5, r.db.readableDatabase.version)
         assertEquals(2890.0, r.rate(oldDate), 0.0)
         assertEquals(1766.0, r.restingRate(LocalDate.now(r.zone)), 0.0)
         assertEquals(LocalDate.now(r.zone).toString(), r.settings.getString("energyStart"))

@@ -45,12 +45,12 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             PermissionController.createRequestPermissionResultContract()
         ) {
             v.refreshSteps()
+            if (v.route == "stats" && v.statsTab == 2) v.refreshWeight()
         }
-    fun connectSteps() {
+    fun connectHealth(permission: String) {
         v.run {
             when (HealthConnectClient.getSdkStatus(context)) {
-                HealthConnectClient.SDK_AVAILABLE ->
-                    healthPermission.launch(setOf(AndroidStepSource.READ_STEPS))
+                HealthConnectClient.SDK_AVAILABLE -> healthPermission.launch(setOf(permission))
                 HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
                     context.startActivity(
                         Intent(
@@ -183,7 +183,12 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             holder.SaveableStateProvider(v.route) {
                 when (v.route) {
-                    "Today" -> TodayScreen(v, { scan(false) }, ::connectSteps)
+                    "Today" ->
+                        TodayScreen(
+                            v,
+                            { scan(false) },
+                            { connectHealth(AndroidStepSource.READ_STEPS) },
+                        )
                     "cook" -> CookScreen(v, { scan(true) })
                     "foods" ->
                         key(v.foodSearchVisit) {
@@ -193,7 +198,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                     "food-edit" -> FoodEditor(v)
                     "fatsecret-settings" -> FatSecretSettingsScreen(v)
                     "history" -> HistoryScreen(v)
-                    "stats" -> StatsScreen(v)
+                    "stats" -> StatsScreen(v) { connectHealth(WeightSync.PERMISSION) }
                     "nutrient-profile" -> NutrientProfileScreen(v)
                     "settings" ->
                         SettingsScreen(
@@ -206,7 +211,8 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                             },
                         )
                     "summary" -> SummaryScreen(v)
-                    "energy" -> ExpenditureScreen(v, ::connectSteps)
+                    "energy" ->
+                        ExpenditureScreen(v, { connectHealth(AndroidStepSource.READ_STEPS) })
                     "activity" -> ActivityCaloriesScreen(v)
                     "details" -> DetailsScreen(v)
                     "calories" -> CaloriesScreen(v)

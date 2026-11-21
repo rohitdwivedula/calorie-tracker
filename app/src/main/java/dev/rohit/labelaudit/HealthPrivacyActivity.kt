@@ -13,12 +13,12 @@ class HealthPrivacyActivity : ComponentActivity() {
             TrackerTheme {
                 Surface {
                     Page {
-                        Section("Steps & privacy") {
+                        Section("Health data & privacy") {
                             Text(
-                                "Batch Nutrition reads daily step totals from Health Connect to estimate expenditure. Health Connect combines your sources; we don't write steps or read other health data."
+                                "Batch Nutrition reads daily step totals from Health Connect to estimate expenditure. With your permission it also reads weigh-ins for your weight trend."
                             )
                             Text(
-                                "Step totals and sync times stay on this phone. They aren't uploaded. Explicit backup exports include saved step totals and sync times, separately from your food and activity records. You can revoke access in Android's Health Connect settings. Food logging continues without access."
+                                "Cached weigh-ins stay on this device and are excluded from food backups. Step totals and sync times stay on this phone. They aren't uploaded. Explicit backup exports include saved step totals and sync times, separately from your food and activity records. You can revoke access in Android's Health Connect settings. Food logging continues without access."
                             )
                             Text(
                                 "Scans and online food searches contact Open Food Facts and, when configured, FatSecret. API credentials stay on this device and are excluded from backups. No analytics or photos are collected."

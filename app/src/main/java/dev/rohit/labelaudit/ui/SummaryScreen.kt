@@ -4,7 +4,6 @@ package dev.rohit.labelaudit
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,109 +15,24 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
-private data class BalanceBar(val start: LocalDate, val end: LocalDate, val label: String)
-
 @Composable
 fun SummaryScreen(v: TrackerViewModel) {
     val r = v.repo
     val history = remember(v.revision) { LoggedHistory(r, System.currentTimeMillis()) }
-    var mode by rememberSaveable { mutableIntStateOf(0) }
-    var anchorText by rememberSaveable { mutableStateOf(history.today.toString()) }
     var deficit by rememberSaveable { mutableStateOf(true) }
-    var selected by rememberSaveable { mutableIntStateOf(-1) }
-    var pickDate by remember { mutableStateOf(false) }
-    val anchor = LocalDate.parse(anchorText)
-    val start =
-        when (mode) {
-            0 -> LoggedHistory.weekStart(anchor, r.settings.getInt("week"))
-            1 -> LoggedHistory.weekStart(anchor, r.settings.getInt("week")).minusWeeks(7)
-            else -> anchor.withDayOfYear(1)
-        }
-    val bars =
-        when (mode) {
-            0 ->
-                (0..6).map {
-                    val d = start.plusDays(it.toLong())
-                    BalanceBar(d, d.plusDays(1), d.dayOfMonth.toString())
-                }
-            1 ->
-                (0..7).map {
-                    val d = start.plusWeeks(it.toLong())
-                    BalanceBar(d, d.plusWeeks(1), d.format(DateTimeFormatter.ofPattern("M/d")))
-                }
-            else ->
-                (0..11).map {
-                    val d = start.plusMonths(it.toLong())
-                    BalanceBar(d, d.plusMonths(1), d.format(DateTimeFormatter.ofPattern("MMM")))
-                }
-        }
-    val end = bars.last().end
-    val summaries = bars.map { history.summary(it.start, it.end) }
-    val period = history.summary(start, end)
-    val focused = selected.takeIf { it in bars.indices }
-    val shown = if (focused == null) period else summaries[focused]
-    val from = if (focused == null) start else bars[focused].start
-    val until = if (focused == null) end else bars[focused].end
-    val daysCount = java.time.temporal.ChronoUnit.DAYS.between(from, until)
-    val pattern = DateTimeFormatter.ofPattern("MMM d, yyyy")
-    val rangeText = "${from.format(pattern)} – ${until.minusDays(1).format(pattern)}"
-    val cumulative =
-        history.summary(LocalDate.parse(r.settings.getString("start")), history.today.plusDays(1))
-    Page {
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            listOf("Days", "Weeks", "Months").forEachIndexed { i, label ->
-                SegmentedButton(
-                    selected = mode == i,
-                    onClick = {
-                        mode = i
-                        selected = -1
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(i, 3),
-                ) {
-                    Text(label)
-                }
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(
-                onClick = {
-                    anchorText =
-                        when (mode) {
-                            0 -> anchor.minusWeeks(1)
-                            1 -> anchor.minusWeeks(8)
-                            else -> anchor.minusYears(1)
-                        }.toString()
-                    selected = -1
-                }
-            ) {
-                Icon(Icons.Default.ChevronLeft, "Previous period")
-            }
-            TextButton(onClick = { pickDate = true }) {
-                Text(
-                    if (mode == 2) anchor.year.toString()
-                    else
-                        "${start.format(DateTimeFormatter.ofPattern("MMM d"))} – ${end.minusDays(1).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
-                )
-            }
-            IconButton(
-                enabled = end <= history.today,
-                onClick = {
-                    anchorText =
-                        when (mode) {
-                            0 -> anchor.plusWeeks(1)
-                            1 -> anchor.plusWeeks(8)
-                            else -> anchor.plusYears(1)
-                        }.toString()
-                    selected = -1
-                },
-            ) {
-                Icon(Icons.Default.ChevronRight, "Next period")
-            }
-        }
+    PeriodPage(history.today, r.settings.getInt("week"), 0) { mode, bars ->
+        var selected by rememberSaveable { mutableIntStateOf(-1) }
+        val start = bars.first().start
+        val end = bars.last().end
+        val summaries = bars.map { history.summary(it.start, it.end) }
+        val period = history.summary(start, end)
+        val focused = selected.takeIf { it in bars.indices }
+        val shown = if (focused == null) period else summaries[focused]
+        val from = if (focused == null) start else bars[focused].start
+        val until = if (focused == null) end else bars[focused].end
+        val daysCount = java.time.temporal.ChronoUnit.DAYS.between(from, until)
+        val pattern = DateTimeFormatter.ofPattern("MMM d, yyyy")
+        val rangeText = "${from.format(pattern)} – ${until.minusDays(1).format(pattern)}"
         val singleDay = daysCount == 1L
         val currentWeek = daysCount == 7L && history.today >= from && history.today < until
         Section(
@@ -168,18 +82,17 @@ fun SummaryScreen(v: TrackerViewModel) {
                 TextButton(onClick = { v.openEnergy(from) }) { Text("View expenditure") }
         }
         Section(if (singleDay) "That day" else "Daily averages") {
-            val unit = if (singleDay) "kcal" else "kcal/day"
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 for ((label, sum) in
                     listOf(
                         "Intake" to shown.nutrition.values[0],
-                        "Est. expenditure" to shown.expenditure,
+                        "Expenditure" to shown.expenditure,
                     )) {
                     Column(Modifier.weight(1f)) {
                         Text(label, style = MaterialTheme.typography.labelLarge)
                         Text(
                             if (shown.loggedDays == 0) "—"
-                            else "${kcal(sum / shown.loggedDays)} $unit",
+                            else "${kcal(sum / shown.loggedDays)} kcal",
                             style = MaterialTheme.typography.titleLarge,
                         )
                     }
@@ -194,14 +107,14 @@ fun SummaryScreen(v: TrackerViewModel) {
                     )
                 else {
                     val days = history.nutrientDays(from, until, i)
-                    val coverage =
-                        if (days.unknown > 0) " · ${days.complete}/${shown.loggedDays} days" else ""
-                    InfoRow(
-                        Nutrients.NAMES[i],
-                        (if (days.complete == 0) "—" else "${fmt(days.average())} g/day") + coverage,
-                    )
+                    InfoRow(Nutrients.NAMES[i], days.averageText(i))
                 }
             }
+            if (
+                shown.loggedDays > 0 &&
+                    (1..4).any { shown.nutrition.known[it] && shown.nutrition.missing[it] }
+            )
+                Text("≥ includes only known amounts.", style = MaterialTheme.typography.bodySmall)
             TextButton(
                 enabled = shown.loggedDays > 0,
                 onClick = {
@@ -213,43 +126,6 @@ fun SummaryScreen(v: TrackerViewModel) {
             ) {
                 Text("View food log")
             }
-        }
-        Section("Since tracking began") {
-            Metric(
-                "Estimated ${if(cumulative.deficit() >= 0) "deficit" else "surplus"}",
-                if (cumulative.loggedDays == 0) "—" else "${kcal(abs(cumulative.deficit()))} kcal",
-                "${cumulative.loggedDays} days logged",
-            )
-        }
-    }
-    if (pickDate) {
-        val state =
-            rememberDatePickerState(
-                initialSelectedDateMillis =
-                    anchor.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-            )
-        DatePickerDialog(
-            onDismissRequest = { pickDate = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        state.selectedDateMillis?.let {
-                            anchorText =
-                                Instant.ofEpochMilli(it)
-                                    .atZone(ZoneOffset.UTC)
-                                    .toLocalDate()
-                                    .toString()
-                        }
-                        selected = -1
-                        pickDate = false
-                    }
-                ) {
-                    Text("Show period")
-                }
-            },
-            dismissButton = { TextButton(onClick = { pickDate = false }) { Text("Cancel") } },
-        ) {
-            DatePicker(state)
         }
     }
 }

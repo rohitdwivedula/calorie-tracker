@@ -22,20 +22,24 @@ import java.time.*
 import org.json.*
 
 @Composable
-fun StatsScreen(v: TrackerViewModel) {
+fun StatsScreen(v: TrackerViewModel, connectWeight: () -> Unit) {
     val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     Column {
-        TabRow(selectedTabIndex = if (v.showNutrientStats) 1 else 0) {
-            listOf("Energy", "Nutrients").forEachIndexed { index, title ->
+        TabRow(selectedTabIndex = v.statsTab) {
+            listOf("Energy", "Nutrients", "Weight").forEachIndexed { index, title ->
                 Tab(
-                    selected = v.showNutrientStats == (index == 1),
-                    onClick = { v.selectNutrientStats(index == 1) },
+                    selected = v.statsTab == index,
+                    onClick = { v.selectStatsTab(index) },
                     text = { Text(title) },
                 )
             }
         }
-        holder.SaveableStateProvider(v.showNutrientStats.toString()) {
-            if (v.showNutrientStats) NutrientStats(v) else SummaryScreen(v)
+        holder.SaveableStateProvider(v.statsTab.toString()) {
+            when (v.statsTab) {
+                1 -> NutrientStats(v)
+                2 -> WeightScreen(v, connectWeight)
+                else -> SummaryScreen(v)
+            }
         }
     }
 }
@@ -107,6 +111,7 @@ private fun NutrientStats(v: TrackerViewModel) {
             days.forEach {
                 tally.add(
                     it.values[i],
+                    it.known[i],
                     it.missing[i],
                     v.repo.goal(i),
                     Nutrients.KEYS[i] == "sodium",
@@ -127,9 +132,7 @@ private fun NutrientStats(v: TrackerViewModel) {
                     Text(
                         if (period == 1)
                             days.firstOrNull()?.let { v.repo.nutrientText(it, i) } ?: "—"
-                        else if (tally.average().isNaN()) "—"
-                        else
-                            "${fmt(tally.average()*Nutrients.displayFactor(i))} ${Nutrients.unit(i)} / day",
+                        else tally.averageText(i, perDay = true),
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     if (i > 0) {
@@ -165,14 +168,11 @@ private fun NutrientStats(v: TrackerViewModel) {
                             )
                     }
 
-                    if (tally.unknown > 0)
+                    if (period == 1 && tally.unknown > 0)
                         Text(
-                            if (period == 1) {
-                                if (days.first().known[i])
-                                    "Partial total · some foods have no data for this nutrient"
-                                else "Not provided by logged foods"
-                            } else
-                                "${tally.unknown} days incomplete · average uses ${tally.complete} complete days",
+                            if (days.first().known[i])
+                                "Partial total · some foods have no data for this nutrient"
+                            else "Not provided by logged foods",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -183,8 +183,7 @@ private fun NutrientStats(v: TrackerViewModel) {
             Text(
                 if (period == 1)
                     "≥ is a known minimum. Missing nutrients aren't zero. Unlogged food isn't included."
-                else
-                    "Current reference profile and custom targets. Missing-data days are excluded per nutrient. Unlogged food isn't included.",
+                else "≥ includes only known amounts. Averages use all logged days.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

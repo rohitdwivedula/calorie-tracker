@@ -236,16 +236,41 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         saved["foodSearchVisit"] = foodSearchVisit
     }
 
-    var showNutrientStats by mutableStateOf(saved.get<Boolean>("showNutrientStats") ?: false)
+    var statsTab by mutableIntStateOf(saved.get<Int>("statsTab") ?: 0)
         private set
 
-    fun selectNutrientStats(selected: Boolean) {
-        showNutrientStats = selected
-        saved["showNutrientStats"] = selected
+    fun selectStatsTab(index: Int) {
+        statsTab = index
+        saved["statsTab"] = index
+    }
+
+    private val weightSync = WeightSync(app, repo.db)
+    var weightStatus by mutableStateOf("idle")
+        private set
+
+    var weightRevision by mutableIntStateOf(0)
+        private set
+
+    fun refreshWeight() {
+        if (weightStatus == "loading") return
+        weightStatus = "loading"
+        viewModelScope.launch {
+            weightStatus =
+                try {
+                    withContext(Dispatchers.IO) { weightSync.refresh() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: SecurityException) {
+                    "permission"
+                } catch (_: Exception) {
+                    "error"
+                }
+            weightRevision++
+        }
     }
 
     fun go(next: String) {
-        if (next == "stats") selectNutrientStats(false)
+        if (next == "stats") selectStatsTab(0)
         if (next == "foods") freshFoodSearch()
         history.show(route, next, route)
         route = next
