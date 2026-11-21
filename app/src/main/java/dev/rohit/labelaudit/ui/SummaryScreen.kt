@@ -119,7 +119,16 @@ fun SummaryScreen(v: TrackerViewModel) {
                 Icon(Icons.Default.ChevronRight, "Next period")
             }
         }
-        Section(if (focused == null) "Period total" else rangeText) {
+        val singleDay = daysCount == 1L
+        val currentWeek = daysCount == 7L && history.today >= from && history.today < until
+        Section(
+            when {
+                currentWeek -> "This week so far"
+                singleDay -> from.format(pattern)
+                focused != null -> rangeText
+                else -> "Period total"
+            }
+        ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(deficit, { deficit = true }, label = { Text("Deficit") })
                 FilterChip(!deficit, { deficit = false }, label = { Text("Intake") })
@@ -130,6 +139,11 @@ fun SummaryScreen(v: TrackerViewModel) {
                 if (shown.loggedDays == 0) "—" else "${kcal(abs(value))} kcal",
                 "${shown.loggedDays}/$daysCount days logged${if(history.today >= from && history.today < until) " · today so far" else ""}",
             )
+            if (daysCount == 7L)
+                Text(
+                    "Full-week deficit goal · ${kcal(r.settings.getDouble("goal"))} kcal",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             BalanceChart(bars, summaries, deficit, focused) {
                 selected = if (selected == it) -1 else it
             }
@@ -146,22 +160,48 @@ fun SummaryScreen(v: TrackerViewModel) {
                 )
             if (shown.incompleteDays > 0)
                 Text(
-                    "${shown.incompleteDays} days have incomplete expenditure data",
+                    "Incomplete expenditure data · ${shown.incompleteDays} ${if (shown.incompleteDays == 1) "day" else "days"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             if (focused != null && mode == 0)
                 TextButton(onClick = { v.openEnergy(from) }) { Text("View expenditure") }
+        }
+        Section(if (singleDay) "That day" else "Daily averages") {
+            val unit = if (singleDay) "kcal" else "kcal/day"
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for ((label, sum) in
+                    listOf(
+                        "Intake" to shown.nutrition.values[0],
+                        "Est. expenditure" to shown.expenditure,
+                    )) {
+                    Column(Modifier.weight(1f)) {
+                        Text(label, style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            if (shown.loggedDays == 0) "—"
+                            else "${kcal(sum / shown.loggedDays)} $unit",
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
+                }
+            }
             HorizontalDivider()
-            InfoRow(
-                "Average daily intake",
-                if (shown.loggedDays == 0) "—" else "${kcal(shown.averageIntake())} kcal",
-            )
-            InfoRow(
-                "Estimated expenditure",
-                if (shown.loggedDays == 0) "—" else "${kcal(shown.expenditure)} kcal",
-            )
-            MacroSummary(r, shown.nutrition)
+            for (i in listOf(1, 4, 2, 3)) {
+                if (singleDay)
+                    InfoRow(
+                        Nutrients.NAMES[i],
+                        if (shown.loggedDays == 0) "—" else r.nutrientText(shown.nutrition, i),
+                    )
+                else {
+                    val days = history.nutrientDays(from, until, i)
+                    val coverage =
+                        if (days.unknown > 0) " · ${days.complete}/${shown.loggedDays} days" else ""
+                    InfoRow(
+                        Nutrients.NAMES[i],
+                        (if (days.complete == 0) "—" else "${fmt(days.average())} g/day") + coverage,
+                    )
+                }
+            }
             TextButton(
                 enabled = shown.loggedDays > 0,
                 onClick = {
@@ -174,26 +214,6 @@ fun SummaryScreen(v: TrackerViewModel) {
                 Text("View food log")
             }
         }
-        if (mode == 0)
-            Section("Full-week goal") {
-                val boundary = LocalDate.parse(r.settings.getString("energyStart"))
-                val guide =
-                    (0..6).sumOf {
-                        val d = start.plusDays(it.toLong())
-                        if (d < boundary) r.rate(d) else r.restingRate(d)
-                    } - r.settings.getDouble("goal")
-                InfoRow("Deficit goal", "${kcal(r.settings.getDouble("goal"))} kcal")
-                InfoRow(
-                    if (end <= boundary) "Intake target" else "Resting-only intake guide",
-                    "${kcal(guide)} kcal",
-                )
-                if (end > boundary)
-                    Text(
-                        "Guide excludes digestion and activity; final expenditure depends on recorded data.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-            }
         Section("Since tracking began") {
             Metric(
                 "Estimated ${if(cumulative.deficit() >= 0) "deficit" else "surplus"}",

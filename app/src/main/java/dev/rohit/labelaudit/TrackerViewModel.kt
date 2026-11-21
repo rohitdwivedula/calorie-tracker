@@ -236,7 +236,16 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
         saved["foodSearchVisit"] = foodSearchVisit
     }
 
+    var showNutrientStats by mutableStateOf(saved.get<Boolean>("showNutrientStats") ?: false)
+        private set
+
+    fun selectNutrientStats(selected: Boolean) {
+        showNutrientStats = selected
+        saved["showNutrientStats"] = selected
+    }
+
     fun go(next: String) {
+        if (next == "stats") selectNutrientStats(false)
         if (next == "foods") freshFoodSearch()
         history.show(route, next, route)
         route = next

@@ -425,15 +425,23 @@ class ComposeFlowTest {
 
     @Config(qualifiers = "w320dp-h891dp-xhdpi")
     @Test
-    fun jsonButtonCopiesPromptThenPastedLabelFillsReviewFormWithoutSaving() {
+    fun openingJsonPreservesClipboardAndCopyPromptIsExplicit() {
         ui.runOnIdle {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
             v.mode = "quick"
             v.manualFood()
         }
         ui.onNodeWithText("Food name").performTextInput("Keep my name")
+        val clip = ui.activity.getSystemService(android.content.ClipboardManager::class.java)
+        ui.runOnIdle {
+            clip.setPrimaryClip(android.content.ClipData.newPlainText("label", "existing JSON"))
+        }
         ui.onNodeWithText("JSON").performClick()
         ui.onNodeWithText("Import label JSON").assertExists()
+        ui.runOnIdle {
+            org.junit.Assert.assertEquals("existing JSON", clip.primaryClip!!.getItemAt(0).text.toString())
+        }
+        ui.onNodeWithText("Copy prompt").performClick()
         ui.runOnIdle {
             val clipboard =
                 ui.activity.getSystemService(android.content.ClipboardManager::class.java)
@@ -661,7 +669,7 @@ class ComposeFlowTest {
         screenshot("settings")
         ui.onNodeWithContentDescription("Back").performClick()
         ui.onNodeWithText("Stats").performClick()
-        ui.onNodeWithText("Nutrition trends").assertIsDisplayed()
+        ui.onNodeWithText("This week so far").assertIsDisplayed()
         screenshot("stats")
         ui.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         ui.onNodeWithText("New dish").assertIsDisplayed()
@@ -682,16 +690,17 @@ class ComposeFlowTest {
                     .put("kcal", 450),
             )
             v.refresh()
-            v.go("summary")
         }
+        ui.onNodeWithContentDescription("Energy balance").performClick()
         ui.onNodeWithText("Days").assertIsDisplayed()
-        ui.onNodeWithText("Average daily intake").assertExists()
+        ui.onNodeWithText("Daily averages").assertExists()
         screenshot("balance-days")
         val day = java.time.LocalDate.now().toString()
         ui.onNodeWithContentDescription("$day:", substring = true).performClick()
         ui.onNodeWithText("1/1 days logged · today so far").assertExists()
+        ui.onNodeWithText("That day").assertExists()
         ui.onNode(hasText("Intake") and hasClickAction()).performClick()
-        ui.onNodeWithText("450 kcal").assertExists()
+        ui.onAllNodesWithText("450 kcal").onFirst().assertExists()
         ui.onNodeWithText("Deficit").performClick()
         ui.onNodeWithText("Weeks").performClick()
         screenshot("balance-weeks")
@@ -701,7 +710,7 @@ class ComposeFlowTest {
         ui.onNodeWithText("Chart meal").assertIsDisplayed()
         ui.onNodeWithText("Show all history").assertIsDisplayed()
         ui.onNodeWithContentDescription("Back").performClick()
-        ui.onNodeWithText("Energy balance").assertIsDisplayed()
+        ui.onNodeWithText("Energy").assertIsDisplayed()
     }
 
     @Test
@@ -852,6 +861,7 @@ class ComposeFlowTest {
             v.refresh()
             v.go("stats")
         }
+        ui.onNodeWithText("Nutrients").performClick()
         ui.onNodeWithText("Today · so far").assertIsDisplayed()
         ui.onNodeWithText("200 kcal").assertExists()
         ui.onNodeWithText("Vitamins").performClick()
@@ -873,22 +883,22 @@ class ComposeFlowTest {
             val current = java.time.YearMonth.now(v.repo.zone)
             birth = "%02d/%04d".format(current.monthValue, current.year - 30)
             v.saveGoal(1, 125.0)
-            v.go("stats")
+            v.openSettings()
         }
-        ui.onNodeWithText("Set reference profile").performClick()
+        ui.onNodeWithText("Set reference profile").performScrollTo().performClick()
         ui.onNodeWithText("Birth month/year (MM/YYYY)").performTextInput(birth)
         ui.onNodeWithText("Current reference age: 30").assertIsDisplayed()
         ui.onNodeWithText("Male").performClick()
         screenshot("nutrient-profile")
         ui.onNodeWithText("Use reference targets").performClick()
-        ui.onNodeWithText("Today · so far").assertIsDisplayed()
+        ui.onNodeWithText("Edit reference profile").assertExists()
         ui.runOnIdle {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
             org.junit.Assert.assertEquals(125.0, v.repo.goal(1), 0.0)
             org.junit.Assert.assertEquals(38.0, v.repo.goal(4), 0.0)
             org.junit.Assert.assertEquals(.000015, v.repo.goal(7), 1e-12)
         }
-        ui.onNodeWithText("Reference profile").performClick()
+        ui.onNodeWithText("Edit reference profile").performScrollTo().performClick()
         ui.onNodeWithText("Birth month/year (MM/YYYY)").assertTextContains(birth)
         ui.onNodeWithText("Female").performClick()
         ui.onNodeWithText("Use reference targets").performClick()

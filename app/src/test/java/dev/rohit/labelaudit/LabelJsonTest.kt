@@ -11,6 +11,29 @@ class LabelJsonTest {
         )
 
     @Test
+    fun emptyTranscriptionRejectedButOrderNameAndPartialContextCanFillForm() {
+        val json = example().put("name", JSONObject.NULL)
+        val nutrients =
+            JSONObject()
+                .put("protein", JSONObject.NULL)
+                .put("kcal", JSONObject().put("amount", JSONObject.NULL).put("unit", "kcal"))
+        json.put("nutrients", nutrients)
+        assertThrows(IllegalArgumentException::class.java) { LabelJson.parse(json.toString()) }
+
+        json.put("name", "Example Cafe plate with rice and vegetables")
+        val orderOnly = LabelJson.parse(json.toString())
+        assertEquals(json.getString("name"), orderOnly.getString("name"))
+        assertEquals("", orderOnly.getString("kcal"))
+
+        nutrients.put("kcal", JSONObject().put("amount", 420).put("unit", "kcal"))
+        nutrients.put("sodium", JSONObject().put("amount", 275).put("unit", "mg"))
+        val withContext = LabelJson.parse(json.toString())
+        assertEquals("420", withContext.getString("kcal"))
+        assertEquals("275", withContext.getString("sodium"))
+        assertEquals("", withContext.getString("protein"))
+    }
+
+    @Test
     fun convertsExplicitMassUnitsAndKeepsServingConversion() {
         val fields = LabelJson.parse(example().toString())
         assertEquals("125", fields.getString("servingGrams"))

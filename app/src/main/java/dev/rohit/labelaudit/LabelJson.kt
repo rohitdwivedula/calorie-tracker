@@ -9,49 +9,41 @@ object LabelJson {
     val prompt: String
         get() =
             """
-            Transcribe the attached food nutrition label into JSON for my nutrition app.
-            Return ONLY one JSON object, without commentary. Do not guess unreadable or absent values;
-            use null or omit them. Use 0 only when explicitly printed as zero. Do not infer nutrients
-            from ingredients, percentages, calorie totals, or another food. Do not round or fix values.
-            Use the nutrition column for ONE label serving, not the whole package, when available.
-            If multiple columns exist, use one consistently for all nutrients and the basis.
+            Inspect the food image, including any label, menu or order text. Use earlier photos
+            and messages about this same food, even if this prompt came later. If the image
+            comes next, use it then. Return one JSON object I can paste into my food log.
 
-            Schema:
-            {
-              "schemaVersion": 1,
-              "name": "Product name, or null if not visible",
-              "basis": {"quantity": 1, "unit": "serving", "servingGrams": null, "servingMl": null},
-              "nutrients": {
-                "kcal": {"amount": 100, "unit": "kcal"},
-                "protein": {"amount": 5, "unit": "g"},
-                "carbs": {"amount": 10, "unit": "g"},
-                "fat": {"amount": 4, "unit": "g"}
-              }
-            }
-            The numbers above are examples ONLY; replace them using the picture.
-            basis.unit must be serving, g, or ml. basis.quantity is the number of those units
-            covered by the nutrition column. For per-serving nutrition use quantity 1, unit serving,
-            and record grams or mL in ONE serving only if printed. For per-100-g nutrition use
-            quantity 100, unit g. Never assume mL equals grams. Omit unknown serving conversions.
-            Use these nutrient keys (usual display units in parentheses):
+            First identify the food. Use the printed name or a descriptive name from the
+            conversation. For an order, combine the restaurant, dish and listed components.
+            Then read every nutrient row in one serving column, including vitamins and minerals.
+            Before returning JSON, check each supported key against the image and any explicit
+            amounts for that same food and serving in the chat, including menu nutrition already
+            looked up and reported in an earlier reply. Prefer the matching label if values conflict.
+            Include every supported value
+            you found, including a stated zero. Only omit a value or use null after checking both.
+
+            Never estimate nutrition from appearance, ingredients, typical menu values or the
+            example below. Keep order count separate from the nutrition basis for one item.
+            If only the food is identifiable, return its name with an empty nutrients object.
+            If neither the food nor any nutrition is identifiable, ask for a clearer image or text.
+
+            Example format (replace the example values):
+            {"schemaVersion":1,"name":"Example food","basis":{"quantity":1,"unit":"serving"},
+             "nutrients":{"kcal":{"amount":120,"unit":"kcal"},"protein":{"amount":6,"unit":"g"}}}
+
+            Use one consistent label column. For a per-100-g label, use quantity 100 and unit "g".
+            Basis units: serving, g, ml. For a serving, you can include servingGrams or servingMl
+            in basis when given. Keep mass and volume separate. Use null for an unknown name.
+
+            Supported nutrient keys and typical units:
             ${Nutrients.KEYS.indices.joinToString(", ") { "${Nutrients.KEYS[it]} (${Nutrients.unit(it)})" }}.
-            Amount units must be kcal for kcal, or g/mg/ug (micrograms) for other nutrients.
-            Vitamin A amounts must be ug RAE, vitamin E mg alpha-tocopherol, folate ug DFE;
-            do not convert IU or other forms yourself. Omit unsupported amount units.
+            Use kcal for energy and g, mg or ug for mass. For vitamin A use RAE, vitamin E
+            alpha-tocopherol and folate DFE. Omit unsupported units such as IU.
 
-            Prefer a printed absolute amount over a percentage. If a vitamin/mineral is ONLY
-            printed as % Daily Value, use this object INSTEAD of amount/unit:
-            {"percentDV": 10, "standard": "us-current", "form": "unknown"}.
-            The percentage is 10 for 10%, not 0.1. Use us-current only for current general US
-            adult/children-4+ labels; use us-legacy for the older US format (often includes Calories
-            from Fat). If the reference/country/age group is unclear, omit the percentage and ask
-            me to clarify. Never use my personal nutrient goals as a label reference.
-            Leave form unknown unless explicitly identified. Supported older-US forms:
-            vitamin-a: retinol, food-beta-carotene, other-food-carotenoids;
-            vitamin-e: natural-alpha, synthetic-alpha;
-            vitamin-b9: food-folate, folic-acid-with-food.
-            Do not include any IDs, URLs, API credentials or other fields. I will review the form
-            before saving; calories are required. Leave unlisted macros unknown.
+            Prefer a printed amount. If a vitamin or mineral gives only a US % Daily Value,
+            its entry may instead look like {"percentDV":10,"standard":"us-current","form":"unknown"}.
+            Use 10 for 10%. Use "us-legacy" for older US labels. If the standard is unclear,
+            skip that nutrient and return the rest of the JSON.
         """
                 .trimIndent()
 
@@ -164,6 +156,13 @@ object LabelJson {
                     }
                 fields.put(key, decimal(normalized * Nutrients.displayFactor(i)))
             }
+        }
+        require(
+            fields.has("name") ||
+                percentages.length() > 0 ||
+                Nutrients.KEYS.any { fields.optString(it).isNotBlank() }
+        ) {
+            "The JSON contains no food name or nutrient values. Check the image or conversation."
         }
         fields.put("labelPercentages", percentages)
         return fields

@@ -105,6 +105,14 @@ public final class LoggedHistory {
     return result;
   }
 
+  public Nutrients.Days nutrientDays(LocalDate from, LocalDate until, int nutrient) {
+    Nutrients.Days tally = new Nutrients.Days();
+    for (Day day : days.subMap(from, true, until, false).values()) {
+      tally.add(day.nutrition.values[nutrient], day.nutrition.missing[nutrient], 0);
+    }
+    return tally;
+  }
+
   public static LocalDate weekStart(LocalDate date, int dayOfWeek) {
     if (dayOfWeek < 1 || dayOfWeek > 7) throw new IllegalArgumentException("Invalid week start");
     return date.minusDays(Math.floorMod(date.getDayOfWeek().getValue() - dayOfWeek, 7));

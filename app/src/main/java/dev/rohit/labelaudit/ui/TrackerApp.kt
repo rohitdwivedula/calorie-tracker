@@ -104,7 +104,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
         when (v.route) {
             "Today" -> "Today"
             "history" -> "Your food log"
-            "stats" -> "Nutrition trends"
+            "stats" -> "Trends"
             "foods" -> if (v.mode == "dish") "Choose an ingredient" else "Search foods"
             "cook" -> "Cooking"
             "portion" -> "Portion size"
@@ -146,7 +146,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                 actions = {
                     if (v.route == "portion" && v.lookupBarcode.isNotBlank()) FoodSourceButtons(v)
                     if (v.route == "Today")
-                        IconButton(onClick = { v.go("summary") }) {
+                        IconButton(onClick = { v.go("stats") }) {
                             Icon(Icons.Default.Insights, "Energy balance")
                         }
                     if (v.route in MainRoutes)

@@ -17,7 +17,7 @@ fun LabelJsonDialog(dismiss: () -> Unit, fill: (JSONObject) -> Unit) {
     val clipboard = LocalClipboardManager.current
     var text by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    var copied by rememberSaveable { mutableStateOf(true) }
+    var copied by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = dismiss,
         title = { Text("Import label JSON") },
@@ -28,8 +28,8 @@ fun LabelJsonDialog(dismiss: () -> Unit, fill: (JSONObject) -> Unit) {
             ) {
                 Text(
                     if (copied)
-                        "Prompt copied. Send it with your label photo to another app, then paste its JSON here."
-                    else "Paste the JSON returned with your label photo."
+                        "Prompt copied."
+                    else "Paste your label JSON here."
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(

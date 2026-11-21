@@ -102,6 +102,35 @@ class LoggedHistoryTest {
     }
 
     @Test
+    fun dailyMacroAveragesUseOnlyCompleteDaysForEachNutrient() {
+        val yesterday = today.minusDays(1)
+        val plate = BatchOperations.record(batch(), 0.5, at(yesterday, 8), "first")
+        r.db.save("batch", BatchOperations.finish(plate, at(today, 8)))
+        val snack = food().put("protein", 0).apply { remove("fiber") }
+        val time = at(today, 9)
+        r.db.save(
+            "direct",
+            batch()
+                .put("id", "snack")
+                .put("portionTracking", false)
+                .put("available", time)
+                .put("completed", time)
+                .put(
+                    "ingredients",
+                    JSONArray().put(JSONObject().put("food", snack).put("quantity", 100)),
+                ),
+        )
+        val history = LoggedHistory(r, now)
+        val protein = history.nutrientDays(start, today.plusDays(1), 1)
+        assertEquals(2, protein.complete)
+        assertEquals(37.5, protein.average(), 1e-8)
+        val fiber = history.nutrientDays(start, today.plusDays(1), 4)
+        assertEquals(1, fiber.complete)
+        assertEquals(1, fiber.unknown)
+        assertEquals(9.0, fiber.average(), 1e-8)
+    }
+
+    @Test
     fun zeroCalorieFoodCountsButSavedFoodsAndCookingDoNot() {
         r.db.save("food", food())
         r.db.save("batch", batch())

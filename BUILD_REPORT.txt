@@ -1,12 +1,12 @@
-Calorie Tracker v0.1.20 — Android app 1.0.20 (version code 22)
+Calorie Tracker v0.1.21 — Android app 1.0.21 (version code 23)
 
-Manual and JSON food entry accept partial labels. Digestion estimates use the known
-macros per ingredient and withhold credit for conflicting macro and calorie values.
+Energy is the default Stats view, with per-day averages and weekly goal context.
+JSON import preserves the clipboard and rejects empty transcriptions.
 
-Release build and release lint passed. All 193 tests passed.
+Release build and release lint passed. All 195 tests passed.
 Verified APK signature, update certificate, and 16 KB ZIP alignment.
 Checked outgoing files and APK for local credentials and signing keys.
 
 APK: app/build/outputs/apk/release/app-release.apk
-Bytes: 6232005
-SHA256: 586bed66273d61a056c043ad14c65915b4039d618786ac81e886e2c5ac7f25bb
+Bytes: 6234517
+SHA256: 3efde104d1c931eef31a827a9e1c618cc75a247065c5cd07eca46fe048c1f0ed

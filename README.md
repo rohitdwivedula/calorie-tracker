@@ -55,13 +55,14 @@ of 25 with Compose LazyColumn. Models are built in memory from database records;
 the UI is paginated rather than issuing a separate SQL query for each page.
 Legacy batch completion summaries are labeled as estimates, not invented meals.
 
-Stats defaults to **Today**, showing the calories, macros, vitamins and minerals
+Stats opens on **Energy**, with period balances and daily averages over logged days.
+The **Nutrients** tab defaults to **Today**, showing the calories, macros, vitamins and minerals
 recorded so far rather than an average. Partial known totals show ≥; entirely missing
 nutrients show —. **7 days** and **30 days** retain per-nutrient averages and reference
 coverage over logged days, including today so far. Zero-calorie foods count as logged
 days; saved foods/cooking do not. Missing-nutrient days are excluded per nutrient.
 
-Choose **Set reference profile** in Stats or **Settings → Nutrient references** once
+Choose **Settings → Nutrient references** once
 for automatic US adult (19+) age/sex-specific RDA/AI targets. Enter birth month/year
 as MM/YYYY; age and reference bands update automatically at the start of the birth
 month. No birth day is stored. Legacy age-only profiles stay readable until updated. Optional pregnancy/lactation
@@ -108,9 +109,8 @@ These label references are separate from personal RDA/AI targets. Unresolved old
 vitamin A/E/folate forms retain the percentage without inventing a nutrient amount.
 See [label references and conversions](docs/label-daily-values.md).
 
-The manual editor's **JSON** button copies a label-transcription prompt and opens
-an import dialog. Send the prompt with a label photo to an app of your choice,
-then return, tap **Paste JSON → Fill form**, review and save normally. This app
+In the manual editor, tap **JSON → Paste JSON → Fill form**, review and save.
+If your AI chat needs the label format, tap **Copy prompt**. This app
 does not send photos or call an LLM. Imports replace nutrition fields in the form;
 unknown values remain blank and required fields still need explicit input.
 See the [label JSON format](docs/label-json.md).
@@ -228,8 +228,7 @@ No derived TEF or expenditure totals are stored. Old backups (schemas 1–3) sti
 
 Weekly/cumulative balance and nutrient averages continue to count only days with food
 intake logged. An activity-only day does not establish a logged food day. The full-week
-deficit goal remains separate; the new resting-only intake guide excludes digestion
-and activity rather than inventing future expenditure.
+deficit goal appears alongside weekly balances.
 
 ## Daily use
 

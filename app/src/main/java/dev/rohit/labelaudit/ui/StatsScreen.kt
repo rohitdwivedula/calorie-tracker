@@ -23,6 +23,25 @@ import org.json.*
 
 @Composable
 fun StatsScreen(v: TrackerViewModel) {
+    val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    Column {
+        TabRow(selectedTabIndex = if (v.showNutrientStats) 1 else 0) {
+            listOf("Energy", "Nutrients").forEachIndexed { index, title ->
+                Tab(
+                    selected = v.showNutrientStats == (index == 1),
+                    onClick = { v.selectNutrientStats(index == 1) },
+                    text = { Text(title) },
+                )
+            }
+        }
+        holder.SaveableStateProvider(v.showNutrientStats.toString()) {
+            if (v.showNutrientStats) NutrientStats(v) else SummaryScreen(v)
+        }
+    }
+}
+
+@Composable
+private fun NutrientStats(v: TrackerViewModel) {
     var period by rememberSaveable { mutableIntStateOf(1) }
     var group by rememberSaveable { mutableIntStateOf(0) }
     var goalIndex by rememberSaveable { mutableIntStateOf(-1) }
@@ -43,13 +62,6 @@ fun StatsScreen(v: TrackerViewModel) {
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            TextButton(onClick = { v.go("summary") }) {
-                Icon(Icons.Default.BarChart, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Energy balance")
-            }
-        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(1, 7, 30).forEach { p ->
@@ -73,14 +85,6 @@ fun StatsScreen(v: TrackerViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        item {
-            TextButton(onClick = v::openNutrientProfile) {
-                Text(
-                    if (v.repo.settings.has("nutrientProfile")) "Reference profile"
-                    else "Set reference profile"
-                )
-            }
         }
         item {
             ScrollableTabRow(selectedTabIndex = group, edgePadding = 0.dp) {

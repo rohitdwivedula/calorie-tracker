@@ -53,7 +53,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                 )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Card(onClick = { v.go("summary") }, Modifier.weight(1f)) {
+            Card(onClick = { v.go("stats") }, Modifier.weight(1f)) {
                 Column(Modifier.padding(16.dp)) {
                     Metric(
                         "Today's ${if(daily>=0)"deficit" else "surplus"}",
@@ -65,7 +65,7 @@ fun TodayScreen(v: TrackerViewModel, scan: () -> Unit, connectSteps: () -> Unit)
                     )
                 }
             }
-            Card(onClick = { v.go("summary") }, Modifier.weight(1f)) {
+            Card(onClick = { v.go("stats") }, Modifier.weight(1f)) {
                 Column(Modifier.padding(16.dp)) {
                     Metric(
                         "Weekly ${if(weekly>=0)"deficit" else "surplus"}",
