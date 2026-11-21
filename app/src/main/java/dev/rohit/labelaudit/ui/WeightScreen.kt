@@ -27,12 +27,17 @@ private fun changeText(kg: Double) =
     }
 
 @Composable
-internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
+internal fun WeightScreen(
+    v: TrackerViewModel,
+    connect: () -> Unit,
+    h: LoggedHistory,
+    bars: List<BalanceBar>,
+) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { v.refreshWeight() }
     val r = v.repo
-    val h = remember(v.revision) { LoggedHistory(r, System.currentTimeMillis()) }
+    val dailyBars = bars.first().end == bars.first().start.plusDays(1)
     val short = DateTimeFormatter.ofPattern("MMM d")
-    PeriodPage(h.today, r.settings.getInt("week"), 1) { mode, bars ->
+    Page {
         val start = bars.first().start
         val end = bars.last().end
         val items =
@@ -45,13 +50,14 @@ internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
         fun date(w: WeighIn) = Instant.ofEpochMilli(w.time).atZone(r.zone).toLocalDate()
         val daily = items.groupBy(::date).mapValues { (_, rows) -> rows.map { it.kg }.average() }
         val change = weightChange(daily)
-        var selected by rememberSaveable { mutableIntStateOf(-1) }
+        var selected by
+            key(start.toString(), bars.size) { rememberSaveable { mutableIntStateOf(-1) } }
         val period = h.summary(start, end)
         Section("Weight trend") {
             if (items.isNotEmpty()) {
                 val points =
                     bars.map { bar ->
-                        if (mode == 0) items.filter { date(it) == bar.start }.map { it.kg }
+                        if (dailyBars) items.filter { date(it) == bar.start }.map { it.kg }
                         else
                             daily
                                 .filterKeys { it >= bar.start && it < bar.end }
@@ -66,7 +72,7 @@ internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
                 val scroll = rememberScrollState()
                 val lastMeasured = points.indexOfLast { it.isNotEmpty() }
                 LaunchedEffect(lastMeasured, scroll.maxValue) {
-                    if (lastMeasured >= 0)
+                    if (lastMeasured >= 0 && bars.size > 1)
                         scroll.scrollTo(scroll.maxValue * lastMeasured / (bars.size - 1))
                 }
                 Row(
@@ -75,7 +81,7 @@ internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
                 ) {
                     bars.forEachIndexed { i, bar ->
                         Column(
-                            Modifier.width(if (mode == 0) 36.dp else 44.dp)
+                            Modifier.width(if (dailyBars) 36.dp else 44.dp)
                                 .clickable { selected = if (selected == i) -1 else i }
                                 .semantics {
                                     contentDescription =
@@ -109,7 +115,7 @@ internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
                     }
                 }
                 Text(
-                    "${pounds(low)} – ${pounds(high)} · ${if(mode==0) "weigh-ins" else "averages of measured days"}",
+                    "${pounds(low)} – ${pounds(high)} · ${if(dailyBars) "weigh-ins" else "averages of measured days"}",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (selected in bars.indices) {
@@ -168,14 +174,26 @@ internal fun WeightScreen(v: TrackerViewModel, connect: () -> Unit) {
         }
         Section("Health Connect") {
             val synced = remember(v.weightRevision) { r.db.lastWeightSync() }
-            if (synced > 0) Text("Last synced ${whenText(synced,r.zone)}")
+            if (synced > 0) {
+                val count =
+                    remember(v.weightRevision) {
+                        r.db.weighIns(synced - Duration.ofDays(30).toMillis(), synced).size
+                    }
+                Text("Last checked ${whenText(synced, r.zone)}")
+                Text(
+                    "$count ${if (count == 1) "weigh-in" else "weigh-ins"} found in the last 30 days"
+                )
+            }
             when (v.weightStatus) {
                 "permission",
                 "update" -> TextButton(onClick = connect) { Text("Connect weight") }
                 "unavailable" -> Text("Health Connect unavailable")
                 else -> {
                     if (v.weightStatus == "error") Text("Refresh failed. Showing saved readings.")
-                    TextButton(onClick = v::refreshWeight, enabled = v.weightStatus != "loading") {
+                    TextButton(
+                        onClick = { v.refreshWeight(recheckRecent = true) },
+                        enabled = v.weightStatus != "loading",
+                    ) {
                         Text(
                             if (v.weightStatus == "loading") "Refreshing…" else "Refresh weigh-ins"
                         )

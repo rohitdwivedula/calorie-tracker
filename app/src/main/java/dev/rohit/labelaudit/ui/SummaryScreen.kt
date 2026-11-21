@@ -19,9 +19,18 @@ import kotlin.math.abs
 fun SummaryScreen(v: TrackerViewModel) {
     val r = v.repo
     val history = remember(v.revision) { LoggedHistory(r, System.currentTimeMillis()) }
+    PeriodPage(history.today, r.settings.getInt("week")) { bars -> EnergyStats(v, history, bars) }
+}
+
+@Composable
+internal fun EnergyStats(v: TrackerViewModel, history: LoggedHistory, bars: List<BalanceBar>) {
+    val r = v.repo
     var deficit by rememberSaveable { mutableStateOf(true) }
-    PeriodPage(history.today, r.settings.getInt("week"), 0) { mode, bars ->
-        var selected by rememberSaveable { mutableIntStateOf(-1) }
+    Page {
+        var selected by
+            key(bars.first().start.toString(), bars.size) {
+                rememberSaveable { mutableIntStateOf(-1) }
+            }
         val start = bars.first().start
         val end = bars.last().end
         val summaries = bars.map { history.summary(it.start, it.end) }
@@ -78,8 +87,7 @@ fun SummaryScreen(v: TrackerViewModel) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            if (focused != null && mode == 0)
-                TextButton(onClick = { v.openEnergy(from) }) { Text("View expenditure") }
+            if (singleDay) TextButton(onClick = { v.openEnergy(from) }) { Text("View expenditure") }
         }
         Section(if (singleDay) "That day" else "Daily averages") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

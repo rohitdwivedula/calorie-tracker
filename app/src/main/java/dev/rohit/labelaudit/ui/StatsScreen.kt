@@ -34,27 +34,34 @@ fun StatsScreen(v: TrackerViewModel, connectWeight: () -> Unit) {
                 )
             }
         }
-        holder.SaveableStateProvider(v.statsTab.toString()) {
-            when (v.statsTab) {
-                1 -> NutrientStats(v)
-                2 -> WeightScreen(v, connectWeight)
-                else -> SummaryScreen(v)
+        val history = remember(v.revision) { LoggedHistory(v.repo, System.currentTimeMillis()) }
+        PeriodPage(history.today, v.repo.settings.getInt("week")) { bars ->
+            holder.SaveableStateProvider(v.statsTab.toString()) {
+                when (v.statsTab) {
+                    1 -> NutrientStats(v, history, bars.first().start, bars.last().end)
+                    2 -> WeightScreen(v, connectWeight, history, bars)
+                    else -> EnergyStats(v, history, bars)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun NutrientStats(v: TrackerViewModel) {
-    var period by rememberSaveable { mutableIntStateOf(1) }
+private fun NutrientStats(
+    v: TrackerViewModel,
+    history: LoggedHistory,
+    start: LocalDate,
+    end: LocalDate,
+) {
+    val singleDay = end == start.plusDays(1)
     var group by rememberSaveable { mutableIntStateOf(0) }
     var goalIndex by rememberSaveable { mutableIntStateOf(-1) }
     val days =
-        remember(period, v.revision) {
-            val history = LoggedHistory(v.repo, System.currentTimeMillis())
-            val start = history.today.minusDays(period.toLong() - 1)
-            history.days.tailMap(start, true).values.map { it.nutrition }
+        remember(history, start, end) {
+            history.days.subMap(start, true, end, false).values.map { it.nutrition }
         }
+    val elapsed = maxOf(0L, minOf(end, history.today.plusDays(1)).toEpochDay() - start.toEpochDay())
     val range =
         when (group) {
             1 -> 5..15
@@ -67,25 +74,9 @@ private fun NutrientStats(v: TrackerViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 7, 30).forEach { p ->
-                    FilterChip(
-                        selected = period == p,
-                        onClick = { period = p },
-                        label = { Text(if (p == 1) "Today" else "$p days") },
-                        modifier =
-                            Modifier.semantics {
-                                contentDescription =
-                                    if (p == 1) "Show today's nutrients" else "Show $p day averages"
-                            },
-                    )
-                }
-            }
-        }
-        item {
             Text(
-                if (period == 1) "Today · so far"
-                else "${days.size}/$period days logged · includes today so far",
+                if (singleDay && start == history.today) "Today · so far"
+                else "${days.size}/$elapsed days logged",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -102,7 +93,7 @@ private fun NutrientStats(v: TrackerViewModel) {
                 EmptyState(
                     Icons.Default.BarChart,
                     "A little more history",
-                    if (period == 1) "Log a food or portion to see today’s nutrients."
+                    if (singleDay) "Log a food or portion to see nutrients for this day."
                     else "Log a food or portion to start your daily averages.",
                 )
             }
@@ -130,8 +121,7 @@ private fun NutrientStats(v: TrackerViewModel) {
                             )
                     }
                     Text(
-                        if (period == 1)
-                            days.firstOrNull()?.let { v.repo.nutrientText(it, i) } ?: "—"
+                        if (singleDay) days.firstOrNull()?.let { v.repo.nutrientText(it, i) } ?: "—"
                         else tally.averageText(i, perDay = true),
                         style = MaterialTheme.typography.headlineSmall,
                     )
@@ -140,8 +130,8 @@ private fun NutrientStats(v: TrackerViewModel) {
                         val today = days.firstOrNull()
                         if (goal > 0 || i == 3)
                             Text(
-                                if (period == 1 && goal > 0) {
-                                    if (today == null) "No intake logged today"
+                                if (singleDay && goal > 0) {
+                                    if (today == null) "No intake logged for this day"
                                     else if (today.missing[i] && !today.known[i])
                                         "${v.repo.goalBasis(i)} · ${fmt(goal*Nutrients.displayFactor(i))} ${v.repo.goalUnit(i)}"
                                     else
@@ -156,11 +146,11 @@ private fun NutrientStats(v: TrackerViewModel) {
                         if (
                             days.isNotEmpty() &&
                                 goal > 0 &&
-                                (period != 1 || today?.known?.get(i) == true)
+                                (!singleDay || today?.known?.get(i) == true)
                         )
                             LinearProgressIndicator(
                                 progress = {
-                                    if (period == 1)
+                                    if (singleDay)
                                         (today!!.values[i] / goal).toFloat().coerceIn(0f, 1f)
                                     else tally.met.toFloat() / days.size
                                 },
@@ -168,7 +158,7 @@ private fun NutrientStats(v: TrackerViewModel) {
                             )
                     }
 
-                    if (period == 1 && tally.unknown > 0)
+                    if (singleDay && tally.unknown > 0)
                         Text(
                             if (days.first().known[i])
                                 "Partial total · some foods have no data for this nutrient"
@@ -181,7 +171,7 @@ private fun NutrientStats(v: TrackerViewModel) {
         }
         item {
             Text(
-                if (period == 1)
+                if (singleDay)
                     "≥ is a known minimum. Missing nutrients aren't zero. Unlogged food isn't included."
                 else "≥ includes only known amounts. Averages use all logged days.",
                 style = MaterialTheme.typography.bodySmall,

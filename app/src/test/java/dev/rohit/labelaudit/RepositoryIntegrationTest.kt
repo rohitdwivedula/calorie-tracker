@@ -2,7 +2,17 @@ package dev.rohit.labelaudit
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.response.ChangesResponse
+import androidx.health.connect.client.response.ReadRecordsResponse
+import androidx.health.connect.client.units.Mass
 import androidx.test.core.app.ApplicationProvider
+import java.lang.reflect.Proxy
+import java.time.Duration
+import java.time.Instant
+import kotlinx.coroutines.runBlocking
 import org.json.*
 import org.junit.*
 import org.junit.Assert.*
@@ -45,6 +55,46 @@ class RepositoryIntegrationTest {
                 "ingredients",
                 JSONArray().put(JSONObject().put("food", food()).put("quantity", 100)),
             )
+
+    @Test
+    fun manualWeightRefreshRecoversMissedRecordWhenChangesAreEmpty() = runBlocking {
+        val now = Instant.parse("2026-11-21T12:00:00Z")
+        val recent = now.minus(Duration.ofDays(1))
+        val old = WeighIn("older", now.minus(Duration.ofDays(40)).toEpochMilli(), 81.0, "scale")
+        val record = WeightRecord(recent, null, Mass.kilograms(80.0), Metadata.manualEntry())
+        var visible = false
+        var reads = 0
+        val client =
+            Proxy.newProxyInstance(
+                HealthConnectClient::class.java.classLoader,
+                arrayOf(HealthConnectClient::class.java),
+            ) { _, method, _ ->
+                when (method.name) {
+                    "getChangesToken" -> "checkpoint"
+                    "getChanges" -> ChangesResponse(emptyList(), "next", false, false)
+                    "readRecords" -> {
+                        reads++
+                        ReadRecordsResponse(if (visible) listOf(record) else emptyList(), null)
+                    }
+                    else -> error(method.name)
+                }
+            } as HealthConnectClient
+        Data(context).use { db ->
+            val sync = WeightSync(context, db)
+            sync.syncRecords(client, now, false)
+            visible = true
+            sync.syncRecords(client, now, false)
+            assertEquals(1, reads)
+            assertTrue(db.weighIns(0, now.toEpochMilli()).isEmpty())
+            db.applyWeightSync(mapOf(old.id to old), null, now.toEpochMilli(), old.time, "next")
+            repeat(2) { sync.syncRecords(client, now, true) }
+            assertEquals(3, reads)
+            assertEquals(listOf(81.0, 80.0), db.weighIns(0, now.toEpochMilli()).map { it.kg })
+            visible = false
+            sync.syncRecords(client, now, true)
+            assertEquals(listOf(old), db.weighIns(0, now.toEpochMilli()))
+        }
+    }
 
     @Test
     fun syncedWeightUpdatesReplaceAndDeleteById() {

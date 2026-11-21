@@ -682,14 +682,31 @@ class ComposeFlowTest {
         }
         ui.onNodeWithText("Stats").performClick()
         ui.onNodeWithText("Weight").performClick()
-        ui.onNodeWithText("Weeks").assertIsSelected()
+        ui.onNodeWithText("Week").assertIsSelected()
+        ui.onNodeWithText("8 wk").performClick()
         ui.onNodeWithText("↓ 2.2 lb").assertExists()
-        ui.onNodeWithText("Days").performClick()
+        ui.onNodeWithText("Week").performClick()
         val date = java.time.LocalDate.now().toString()
         ui.onNodeWithContentDescription("$date: 174.2 lb").performScrollTo().performClick()
         ui.onNodeWithText("174.2 lb").assertExists()
-        ui.onNodeWithText("Months").performScrollTo().performClick()
-        ui.onNodeWithText("Months").assertIsSelected()
+        ui.onNodeWithText("Year").performScrollTo().performClick()
+        ui.onNodeWithText("Year").assertIsSelected()
+    }
+
+    @Test
+    fun statsTabsKeepTheSelectedDateAndRange() {
+        ui.onNodeWithText("Stats").performClick()
+        ui.onNodeWithText("Day").performClick()
+        ui.onNodeWithContentDescription("Previous period").performClick()
+        val yesterday =
+            java.time.LocalDate.now()
+                .minusDays(1)
+                .format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+        for (tab in listOf("Nutrients", "Weight", "Energy")) {
+            ui.onNodeWithText(tab).performClick()
+            ui.onNodeWithText("Day").assertIsSelected()
+            ui.onNode(hasText(yesterday) and hasClickAction()).assertIsDisplayed()
+        }
     }
 
     @Test
@@ -722,7 +739,7 @@ class ComposeFlowTest {
             v.refresh()
         }
         ui.onNodeWithContentDescription("Energy balance").performClick()
-        ui.onNodeWithText("Days").assertIsDisplayed()
+        ui.onNodeWithText("Week").assertIsDisplayed()
         ui.onNodeWithText("Daily averages").assertExists()
         screenshot("balance-days")
         val day = java.time.LocalDate.now().toString()
@@ -732,9 +749,9 @@ class ComposeFlowTest {
         ui.onNode(hasText("Intake") and hasClickAction()).performClick()
         ui.onAllNodesWithText("450 kcal").onFirst().assertExists()
         ui.onNodeWithText("Deficit").performClick()
-        ui.onNodeWithText("Weeks").performClick()
+        ui.onNodeWithText("8 wk").performClick()
         screenshot("balance-weeks")
-        ui.onNodeWithText("Months").performClick()
+        ui.onNodeWithText("Year").performClick()
         screenshot("balance-months")
         ui.onNodeWithText("View food log").performScrollTo().performClick()
         ui.onNodeWithText("Chart meal").assertIsDisplayed()
@@ -892,15 +909,16 @@ class ComposeFlowTest {
             v.go("stats")
         }
         ui.onNodeWithText("Nutrients").performClick()
+        ui.onNodeWithText("Day").performClick()
         ui.onNodeWithText("Today · so far").assertIsDisplayed()
         ui.onNodeWithText("200 kcal").assertExists()
         ui.onNodeWithText("Vitamins").performClick()
         ui.onNodeWithText("≥25 mg").assertExists()
         ui.onAllNodesWithText("Not provided by logged foods").onFirst().assertExists()
         screenshot("stats-today-vitamins")
-        ui.onNodeWithText("7 days").performClick()
+        ui.onNodeWithText("8 wk").performClick()
         ui.onNodeWithText("≥62.5 mg / day").assertExists()
-        ui.onNodeWithContentDescription("Show today's nutrients").performClick()
+        ui.onNodeWithText("Day").performClick()
         ui.onNodeWithText("≥25 mg").assertExists()
     }
 

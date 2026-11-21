@@ -55,10 +55,8 @@ the UI is paginated rather than issuing a separate SQL query for each page.
 Legacy batch completion summaries are labeled as estimates, not invented meals.
 
 Stats opens on **Energy**, with period balances and daily averages over logged days.
-The **Nutrients** tab defaults to **Today**, showing the calories, macros, vitamins and minerals
-recorded so far rather than an average. Partial known totals show ≥; entirely missing
-nutrients show —. **7 days** and **30 days** retain per-nutrient averages and reference
-coverage over logged days, including today so far. Zero-calorie foods count as logged
+In **Nutrients**, the day view shows calories, macros, vitamins and minerals for the selected date.
+Longer ranges show daily averages and reference coverage across logged days in that period. Zero-calorie foods count as logged
 days; saved foods/cooking do not. Averages divide known nutrient amounts by all logged days. Partial averages show ≥ and entirely unknown values show —.
 
 Choose **Settings → Nutrient references** once
@@ -74,8 +72,7 @@ facts. The profile is included and validated in schema 4 backups, without a SQL 
 Reference values, units, scope and official sources are documented in
 [docs/nutrient-references.md](docs/nutrient-references.md).
 
-Energy balance offers Days (one calendar week, Sunday–Saturday by default), Weeks
-(eight weeks), and Months (one calendar year). Browse with arrows, jump using the
+The shared picker offers Day, Week (Sunday–Saturday by default), Month, 8 wk, and Year. Browse with arrows, jump using the
 range/date picker, or scroll the wider charts. Tap a bar to select its period and
 use View food log to inspect its entries. Toggle intake/deficit; surplus bars extend
 below zero. Coverage always shows logged days versus calendar days in the range.
@@ -193,10 +190,12 @@ outside calorie-only entries still leave digestion incomplete. The breakdown lab
 the fallback explicitly. Changing, backdating or deleting a quick log recalculates
 only its day's fallback; food calories are never changed.
 
-**Stats → Weight** opens in Weeks. Days shows individual weigh-ins. Weeks and Months
-give each measured day equal weight. Tap a chart point to inspect its readings.
+Stats opens on the current week and keeps the selected date and range across all three tabs.
+The Weight chart shows individual weigh-ins in day, week, and month views. The eight-week
+and year views give each measured day equal weight. Tap a chart point to inspect its readings.
 The Weight tab requests READ_WEIGHT separately and syncs on entry, resume, or refresh.
-Initial sync reads the last 30 days. A Health Connect change token tracks new readings,
+**Refresh weigh-ins** rechecks the last 30 days, even after an empty first sync.
+Automatic refresh uses incremental changes after the initial 30-day read. A Health Connect change token tracks new readings,
 corrections and deletions. SQLite stores measurements and the token together. This
 device cache is separate from food backups. No older-history permission is requested.
 

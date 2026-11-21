@@ -251,13 +251,13 @@ class TrackerViewModel(app: Application, private val saved: SavedStateHandle) :
     var weightRevision by mutableIntStateOf(0)
         private set
 
-    fun refreshWeight() {
+    fun refreshWeight(recheckRecent: Boolean = false) {
         if (weightStatus == "loading") return
         weightStatus = "loading"
         viewModelScope.launch {
             weightStatus =
                 try {
-                    withContext(Dispatchers.IO) { weightSync.refresh() }
+                    withContext(Dispatchers.IO) { weightSync.refresh(recheckRecent) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: SecurityException) {

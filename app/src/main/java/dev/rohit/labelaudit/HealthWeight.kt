@@ -80,7 +80,7 @@ internal class WeightSync(private val context: Context, private val db: Data) {
         val PERMISSION = HealthPermission.getReadPermission(WeightRecord::class)
     }
 
-    suspend fun refresh(): String {
+    suspend fun refresh(recheckRecent: Boolean): String {
         when (HealthConnectClient.getSdkStatus(context)) {
             HealthConnectClient.SDK_AVAILABLE -> Unit
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> return "update"
@@ -88,38 +88,53 @@ internal class WeightSync(private val context: Context, private val db: Data) {
         }
         val client = HealthConnectClient.getOrCreate(context)
         if (PERMISSION !in client.permissionController.getGrantedPermissions()) return "permission"
+        syncRecords(client, Instant.now(), recheckRecent)
+        return "ok"
+    }
+
+    internal suspend fun syncRecords(
+        client: HealthConnectClient,
+        now: Instant,
+        recheckRecent: Boolean,
+    ) {
         val previous =
             db.readableDatabase.rawQuery("SELECT token,since FROM weight_sync", null).use {
                 if (it.moveToFirst()) it.getString(0) to it.getLong(1) else null
             }
-        val now = Instant.now()
-        val since = previous?.second ?: now.minus(Duration.ofDays(30)).toEpochMilli()
+        val recentStart = now.minus(Duration.ofDays(30)).toEpochMilli()
+        val since = previous?.second ?: recentStart
         val updates = mutableMapOf<String, WeighIn?>()
         var token = previous?.first
         var snapshotFrom: Long? = null
+        var renewedToken = token == null
+        var readFrom = if (token == null) since else if (recheckRecent) recentStart else null
         while (true) {
-            if (token == null) {
+            if (token == null)
                 token = client.getChangesToken(ChangesTokenRequest(setOf(WeightRecord::class)))
-                snapshotFrom = since
+            if (readFrom != null) {
+                snapshotFrom = readFrom
                 var page: String? = null
                 do {
                     val response =
                         client.readRecords(
                             ReadRecordsRequest(
                                 WeightRecord::class,
-                                TimeRangeFilter.between(Instant.ofEpochMilli(since), now),
+                                TimeRangeFilter.between(Instant.ofEpochMilli(readFrom), now),
                                 pageToken = page,
                             )
                         )
                     response.records.forEach { updates[it.metadata.id] = it.measurement() }
                     page = response.pageToken
                 } while (page != null)
+                readFrom = null
             }
             val changes = client.getChanges(token)
             if (changes.changesTokenExpired) {
-                check(snapshotFrom == null) { "Weight sync expired during refresh" }
+                check(!renewedToken) { "Weight sync expired during refresh" }
                 updates.clear()
+                renewedToken = true
                 token = null
+                readFrom = since
                 continue
             }
             for (change in changes.changes) when (change) {
@@ -132,7 +147,7 @@ internal class WeightSync(private val context: Context, private val db: Data) {
             token = changes.nextChangesToken
             if (!changes.hasMore) {
                 db.applyWeightSync(updates, snapshotFrom, now.toEpochMilli(), since, token)
-                return "ok"
+                return
             }
         }
     }
