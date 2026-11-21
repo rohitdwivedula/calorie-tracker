@@ -23,7 +23,7 @@ until confirmed.
 Screens and shared components are split under `ui/`. `TrackerRepository` contains
 the existing Java accounting/persistence queries, `FoodLookup` handles explicit
 archived API lookup, and `BatchOperations` edits recorded facts without UI code.
-Database schema 5 adds a local weight cache. Backup schemas 1–5 remain supported. Returning to the app refreshes the as-of calculations.
+Database schema 5 adds a local weight cache. Backup schemas 1–6 remain supported. Returning to the app refreshes the as-of calculations.
 
 Model attribution for AI-assisted commits is required by [AGENTS.md](AGENTS.md).
 Release publication always requires user approval. Personal backups and nutrition
@@ -194,6 +194,7 @@ Stats opens on the current week and keeps the selected date and range across all
 The Weight chart shows individual weigh-ins in day, week, and month views. The eight-week
 and year views give each measured day equal weight. Tap a chart point to inspect its readings.
 The Weight tab requests READ_WEIGHT separately and syncs on entry, resume, or refresh.
+**Import past weigh-ins** accepts a JSON file or pasted readings in lb or kg, with optional local times, time zone, and body-fat percentages. Review the rows before saving. Same-day Health Connect overlaps start unchecked. Imported readings are local records included in backups.
 **Refresh weigh-ins** rechecks the last 30 days, even after an empty first sync.
 Automatic refresh uses incremental changes after the initial 30-day read. A Health Connect change token tracks new readings,
 corrections and deletions. SQLite stores measurements and the token together. This
@@ -428,8 +429,8 @@ exercise concurrency, fallback, selection, editing and preservation of historica
 
 ## Backup and privacy
 
-**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 5
-(restore also accepts schemas 1–4) and
+**Settings → Export backup** writes a portable UTF-8 JSON file with backup schema 6
+(restore also accepts schemas 1–5) and
 authoritative records/settings using Android's document picker. **Restore** validates
 types, quantities, dates, policy, IDs, snapshots and timestamps before a transactional
 replacement. It replaces ALL tracker data after confirmation; it does not merge.

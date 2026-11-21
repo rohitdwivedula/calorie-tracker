@@ -227,7 +227,7 @@ class ExpenditureIntegrationTest {
         assertEquals(0.0, r.extraActivity(day), 0.0)
         StepsSync(r, FakeSource()).refresh(listOf(day), time(day.plusDays(1), 12))
         val backup = r.db.backup()
-        assertEquals(5, JSONObject(backup).getInt("schema"))
+        assertEquals(6, JSONObject(backup).getInt("schema"))
         assertEquals(1, JSONObject(backup).getJSONArray("cachedSteps").length())
         r.db.restore(backup)
         r.db.restore(backup)

@@ -666,6 +666,35 @@ class ComposeFlowTest {
     }
 
     @Test
+    fun importPastWeightWithPreview() {
+        ui.onNodeWithText("Stats").performClick()
+        ui.onNodeWithText("Weight").performClick()
+        ui.onNodeWithText("Import past weigh-ins").performScrollTo().performClick()
+        ui.runOnIdle {
+            val clip = ui.activity.getSystemService(android.content.ClipboardManager::class.java)
+            clip.setPrimaryClip(
+                android.content.ClipData.newPlainText(
+                    "synthetic weight",
+                    """{"schemaVersion":1,"unit":"lb","weighIns":[{"date":"2024-03-04","weight":150}]}""",
+                )
+            )
+        }
+        ui.onNodeWithText("Paste JSON").performClick()
+        ui.onNodeWithText("Preview").performClick()
+        ui.waitUntil(10000) {
+            ui.onAllNodesWithText("1 of 1 selected").fetchSemanticsNodes().isNotEmpty()
+        }
+        ui.onNodeWithText("Import").performClick()
+        ui.waitUntil(10000) {
+            ui.onAllNodesWithText("Review weigh-ins").fetchSemanticsNodes().isEmpty()
+        }
+        ui.runOnIdle {
+            val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]
+            org.junit.Assert.assertEquals(1, v.repo.db.list(WeightImport.kind).size)
+        }
+    }
+
+    @Test
     fun weightTabShowsCachedScaleChangeAndReadings() {
         ui.runOnIdle {
             val v = androidx.lifecycle.ViewModelProvider(ui.activity)[TrackerViewModel::class.java]

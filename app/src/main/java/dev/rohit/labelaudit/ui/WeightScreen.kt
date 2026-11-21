@@ -41,14 +41,11 @@ internal fun WeightScreen(
         val start = bars.first().start
         val end = bars.last().end
         val items =
-            remember(start, end, v.weightRevision) {
-                r.db.weighIns(
-                    r.midnight(start),
-                    minOf(r.midnight(end), System.currentTimeMillis() + 1),
-                )
+            remember(start, end, v.weightRevision, v.revision) {
+                r.db.chartWeights(start, end, r.zone, Instant.now())
             }
-        fun date(w: WeighIn) = Instant.ofEpochMilli(w.time).atZone(r.zone).toLocalDate()
-        val daily = items.groupBy(::date).mapValues { (_, rows) -> rows.map { it.kg }.average() }
+        val daily =
+            items.groupBy { it.date }.mapValues { (_, rows) -> rows.map { it.kg }.average() }
         val change = weightChange(daily)
         var selected by
             key(start.toString(), bars.size) { rememberSaveable { mutableIntStateOf(-1) } }
@@ -57,7 +54,7 @@ internal fun WeightScreen(
             if (items.isNotEmpty()) {
                 val points =
                     bars.map { bar ->
-                        if (dailyBars) items.filter { date(it) == bar.start }.map { it.kg }
+                        if (dailyBars) items.filter { it.date == bar.start }.map { it.kg }
                         else
                             daily
                                 .filterKeys { it >= bar.start && it < bar.end }
@@ -120,13 +117,19 @@ internal fun WeightScreen(
                 )
                 if (selected in bars.indices) {
                     val bar = bars[selected]
-                    val readings = items.filter { date(it) >= bar.start && date(it) < bar.end }
+                    val readings = items.filter { it.date >= bar.start && it.date < bar.end }
                     Text(
                         if (readings.isEmpty()) "No weigh-ins in this period"
                         else "${bar.start.format(short)} · readings",
                         style = MaterialTheme.typography.labelLarge,
                     )
-                    for (w in readings) InfoRow(whenText(w.time, r.zone), pounds(w.kg))
+                    for (w in readings) {
+                        val label = w.time?.let { whenText(it, r.zone) } ?: w.date.format(short)
+                        InfoRow(
+                            if (w.imported != null) "$label · imported" else label,
+                            pounds(w.kg),
+                        )
+                    }
                 }
             } else
                 Text(
@@ -145,6 +148,7 @@ internal fun WeightScreen(
                 )
             } else if (items.isNotEmpty()) Text("Scale change needs two measured days.")
         }
+        TextButton(onClick = { v.go("weight-import") }) { Text("Import past weigh-ins") }
         Section("Energy comparison") {
             InfoRow(
                 if (period.deficit() < 0) "Estimated surplus" else "Estimated deficit",

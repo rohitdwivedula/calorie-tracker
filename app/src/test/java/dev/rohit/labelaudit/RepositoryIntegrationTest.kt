@@ -57,6 +57,44 @@ class RepositoryIntegrationTest {
             )
 
     @Test
+    fun importedWeightSurvivesBackupAndOverlappingHealthConnectReads() {
+        val repo = TrackerRepository(context)
+        val db = repo.db
+        val date = java.time.LocalDate.parse("2024-02-20")
+        val zone = java.time.ZoneId.of("Europe/Paris")
+        val json =
+            """{"schemaVersion":1,"unit":"lb","timeZone":"Europe/Paris","weighIns":[
+            {"date":"2024-02-20","time":"13:38","weight":165.3,"bodyFatPercent":21},
+            {"date":"2024-02-20","time":"08:20","weight":167},
+            {"date":"2024-02-19","weight":166}]}"""
+        val rows = WeightImport.parse(json, java.time.ZoneOffset.UTC)
+        val clock = rows.first().instant!!.plusSeconds(15).toEpochMilli()
+        val scale = WeighIn("scale", clock, rows.first().kg, "scale.app")
+        assertEquals(1, db.importWeights(listOf(rows.first()), emptySet()))
+        db.applyWeightSync(mapOf("scale" to scale), null, clock, 0, "checkpoint")
+        val preview = db.weightCandidates(rows)
+        assertTrue(preview.first().duplicate)
+        assertEquals(listOf(scale), preview[1].sameDay)
+        assertEquals(1, db.importWeights(rows, emptySet()))
+        assertEquals(1, db.importWeights(rows, setOf(rows[1].id)))
+        assertEquals(0, db.importWeights(rows, setOf(rows[1].id)))
+        val backup = db.backup()
+        db.restore(backup)
+        val displayed =
+            db.chartWeights(date.minusDays(1), date.plusDays(1), zone, Instant.ofEpochMilli(clock))
+        assertEquals(3, displayed.size)
+        assertNull(displayed.first().time)
+        assertEquals(1, displayed.count { it.imported == null })
+        assertEquals(
+            21.0,
+            db.list(WeightImport.kind)
+                .single { it.getString("id") == rows.first().id }
+                .getDouble("bodyFatPercent"),
+            0.0,
+        )
+    }
+
+    @Test
     fun manualWeightRefreshRecoversMissedRecordWhenChangesAreEmpty() = runBlocking {
         val now = Instant.parse("2026-11-21T12:00:00Z")
         val recent = now.minus(Duration.ofDays(1))

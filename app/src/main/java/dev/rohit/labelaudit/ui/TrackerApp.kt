@@ -112,6 +112,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
             "settings" -> "Settings"
             "fatsecret-settings" -> "FatSecret"
             "nutrient-profile" -> "Nutrient references"
+            "weight-import" -> "Import past weigh-ins"
             "summary" -> "Energy balance"
             "energy" -> "Expenditure"
             "activity" -> "Activity calories"
@@ -210,6 +211,7 @@ fun TrackerApp(v: TrackerViewModel = viewModel()) {
                                 )
                             },
                         )
+                    "weight-import" -> WeightImportScreen(v)
                     "summary" -> SummaryScreen(v)
                     "energy" ->
                         ExpenditureScreen(v, { connectHealth(AndroidStepSource.READ_STEPS) })

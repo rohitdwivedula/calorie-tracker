@@ -255,6 +255,7 @@ public final class Data extends SQLiteOpenHelper {
 
   private static void validate(String kind, JSONObject j, boolean draft) throws Exception {
     if (j.getString("id").isEmpty()) throw new Exception("Missing ID");
+    if (kind.equals("importedWeight")) { WeightImport.validate(j); return; }
     if (kind.equals("draft")) {
       JSONObject batch = j.getJSONObject("batch");
       if (!j.getString("id").equals("draft-" + batch.getString("id")))
@@ -349,11 +350,11 @@ public final class Data extends SQLiteOpenHelper {
   }
 
   public String backup() throws Exception {
-    JSONObject root = new JSONObject().put("schema", 5);
+    JSONObject root = new JSONObject().put("schema", 6);
     JSONArray rows = new JSONArray();
     for (String k :
         new String[] {
-          "food", "batch", "direct", "calorie", "settings", "rate", "resting", "activity", "draft"
+          "food", "batch", "direct", "calorie", "settings", "rate", "resting", "activity", "draft", "importedWeight"
         }) for (JSONObject j : list(k)) rows.put(new JSONObject().put("kind", k).put("data", j));
     String result =
         root.put("records", rows)
@@ -367,7 +368,7 @@ public final class Data extends SQLiteOpenHelper {
 
   public void restore(String text) throws Exception {
     JSONObject root = new JSONObject(text);
-    if (root.getInt("schema") < 1 || root.getInt("schema") > 5)
+    if (root.getInt("schema") < 1 || root.getInt("schema") > 6)
       throw new Exception("Unsupported schema");
     JSONArray rows = root.getJSONArray("records");
     JSONArray lookups = root.has("lookups") ? root.getJSONArray("lookups") : new JSONArray();

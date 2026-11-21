@@ -55,7 +55,7 @@ class DraftIntegrationTest {
         val now = System.currentTimeMillis()
         assertEquals(0.0, original.repo.intake(0, now, now)[0], 0.0)
         val backup = original.repo.db.backup()
-        assertEquals(5, JSONObject(backup).getInt("schema"))
+        assertEquals(6, JSONObject(backup).getInt("schema"))
         original.repo.db.close()
 
         // No Activity/SavedStateHandle state: represents returning after process death.
